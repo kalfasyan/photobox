@@ -63,7 +63,7 @@ def snap_detect():
         phi.capture()
         phi.save(detection=False)
         print("Saved image")
-        disp_img = cv2.cvtColor(phi.edged_image,cv2.COLOR_BGR2RGB)
+        disp_img = cv2.cvtColor(phi.image,cv2.COLOR_BGR2RGB) # edged_image if using detections
         disp_img = cv2.resize(disp_img, (640,480))
         pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,3])
         del phi
