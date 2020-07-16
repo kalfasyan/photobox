@@ -9,7 +9,7 @@ from configparser import ConfigParser
 import threading
 import pathlib
 import logging
-from common import config_path, make_dirs, check_dir_location
+from common import config_path, make_dirs, check_dir_location, platelocations
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def clear_lights(on=lights_on):
 ###############################################
 
 class PicamHandler:
-    def __init__(self, setting="image", currdir_full=None, plateloc=None, platedate=None):
+    def __init__(self, setting="image", currdir_full=None, plateloc=None, platedate=None, platenotes=''):
         assert setting in ['image', 'video'], "Only image or video accepted."
         self.setting = setting
         assert check_dir_location(currdir_full), "Wrong base directory for wingbeat sensor."        
@@ -59,6 +59,7 @@ class PicamHandler:
                 
         self.plateloc = plateloc
         self.platedate = platedate
+        self.platenotes = platenotes
 
         if self.setting == 'image':
             self.width = int(config.get('camera', 'width'))
@@ -86,7 +87,7 @@ class PicamHandler:
     def capture(self):
         assert self.setting == 'image', "Function used for images only."
         assert hasattr(self, 'camera'), "Camera not initialized."
-        assert self.plateloc in ['herent','kampen','beauvech','brainelal','other'], f"Wrong plate location provided: {self.plateloc}."
+        assert self.plateloc in platelocations, f"Wrong plate location provided: {self.plateloc}."
         assert self.platedate.startswith('w') or self.platedate.startswith('20') and len(self.platedate) <= 8, "Wrong plate date provided."
 
         self.camera.capture(self.rawCapture, format="bgr")
@@ -132,6 +133,8 @@ class PicamHandler:
             savedir = self.imgdir
 
         ResultName = f"{savedir}/{self.plateloc}_{self.platedate}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
+        if len(self.platenotes) > 0:
+            ResultName = f"{savedir}/{self.plateloc}_{self.platedate}_{self.platenotes}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
         cv2.imwrite(ResultName, self.image)
         if detection:
             assert hasattr(self, 'edged_image'), "No detection performed yet. Run detect() first."

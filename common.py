@@ -23,7 +23,7 @@ config.read(config_path)
 width = int(config.get('app', 'width'))
 assert 1000 > width > 500, "App window width dimension error! Change settings"
 height = int(config.get('app', 'height'))
-assert 1000 > height > 500, "App window height dimension error! Change settings"
+assert 1300 > height > 500, "App window height dimension error! Change settings"
 background = config.get('app', 'backgroundcolor')
 assert background in ['white','black','red','green','blue','yellow'], "Error! Wrong background color given in settings"
 blankimgheight = int(config.get('app', 'blankimgheight'))
@@ -38,3 +38,16 @@ if str(config.get('dht22', 'installed')) == "True":
     dht22_sensor = True
 else:
     dht22_sensor = False
+
+platelocations = ["herent", 
+                "kampen", 
+                "beauvech", 
+                "brainelal", 
+                "herentVAL1", 
+                "herentVAL2",
+                "herentVAL3",
+                "herentVAL4",
+                "herentVAL5",
+                "herentCONTROLE",
+                "herentVALdelta",
+                "other"]

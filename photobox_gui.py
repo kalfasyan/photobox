@@ -58,14 +58,14 @@ def snap_detect():
     if len(platedate_str.value):
         print("Warming up..")
         print(platedate_str.value)
-        phi = PicamHandler(setting='image', currdir_full=currdir_full, plateloc=plateloc_bt.value ,platedate=platedate_str.value)
+        phi = PicamHandler(setting='image', currdir_full=currdir_full, plateloc=plateloc_bt.value ,platedate=platedate_str.value, platenotes=platenotes_str.value)
         # phi.capture_and_detect(save=True)
         phi.capture()
         phi.save(detection=False)
         print("Saved image")
         disp_img = cv2.cvtColor(phi.image,cv2.COLOR_BGR2RGB) # edged_image if using detections
         disp_img = cv2.resize(disp_img, (640,480))
-        pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,3])
+        pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,4])
         del phi
     else:
         app.error(title='Error', text='Is location and date set?')
@@ -169,6 +169,13 @@ def select_date():
     else:
         app.error(title='Error', text='Date needs to be either in week format: w20 or YYYYMMDD like 20191218.')
 
+def enter_notes():
+    givennotes = app.question("Plate notes", "Give some notes regarding the plate.")
+    if len(givennotes) < 10:
+        platenotes_str.value = givennotes
+    else:
+        app.error(title='Error', text='Length of text provided is too long.')
+
 # ------------- STOP GUI -------------
 # ------------------------------------
 
@@ -184,22 +191,25 @@ if __name__=="__main__":
     makedir_bt = PushButton(app, command=create_sess, text="Create new session folder", grid=[1,0], align='right')
     madedir_str = Text(app, grid=[1,0], align='left')
     
-    plateloc_bt = ButtonGroup(app, options=["herent", "kampen", "beauvech", "brainelal", "other"], 
+    plateloc_bt = ButtonGroup(app, options=platelocations, 
                                     command=select_location, grid=[0,2],
                                     selected="other", align='left')
     platedate_bt = PushButton(app, text='date', command=select_date, grid=[0,2], align='right')
     platedate_str = Text(app, grid=[1,2], align='left')
 
-    pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,3])
+    platenotes_bt = PushButton(app, text='notes', command=enter_notes, grid=[0,3], align='right')
+    platenotes_str = Text(app, grid=[1,3], align='left')
 
-    snap_button = PushButton(app, command=snap_detect, text="Take a picture", grid=[0,3], align='left')
-    start_video_button = PushButton(app, command=start_video, text="Live Video", grid=[0,4], align='left')
-    stop_video_button = PushButton(app, command=stop_video, text="Stop Video", enabled=False, grid=[0,4], align='right')
+    pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,4])
+
+    snap_button = PushButton(app, command=snap_detect, text="Take a picture", grid=[0,4], align='left')
+    start_video_button = PushButton(app, command=start_video, text="Live Video", grid=[0,5], align='left')
+    stop_video_button = PushButton(app, command=stop_video, text="Stop Video", enabled=False, grid=[0,5], align='right')
 
     # shortpreview_bt = PushButton(app, command=camera_preview, text="Camera preview", grid=[0,6], align='left')
 
-    Text(app, text="Click below to quit and end the session.", grid=[1,6], align='right')
-    PushButton(app, command=do_on_close, text='END SESSION', grid=[1,7], align='right')
+    Text(app, text="Click below to quit and end the session.", grid=[1,7], align='right')
+    PushButton(app, command=do_on_close, text='END SESSION', grid=[1,8], align='right')
 
     app.on_close(do_on_close)
     app.display()
