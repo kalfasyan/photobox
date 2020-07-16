@@ -53,8 +53,8 @@ class PicamHandler:
         self.setting = setting
         assert check_dir_location(currdir_full), "Wrong base directory for wingbeat sensor."        
         self.currdir_full = currdir_full
-        self.imgdir = f"{currdir_full}/images"
-        self.viddir = f"{currdir_full}/videos"
+        self.imgdir = f"{currdir_full}/"
+        self.viddir = f"{currdir_full}/"
         make_dirs([self.imgdir, self.viddir])
                 
         self.plateloc = plateloc
@@ -66,10 +66,15 @@ class PicamHandler:
             self.height = int(config.get('camera', 'height'))
             try:
                 self.camera = PiCamera()
-                self.camera.resolution = (self.width, self.height)
-                self.rawCapture = PiRGBArray(self.camera, size=(self.width, self.height))
+                time.sleep(.5)
+
             except:
-                print("ERROR: Camera unavailable. Maybe another process is using it?")
+                logger.info("ERROR: Camera unavailable. Maybe another process is using it?")
+            self.camera.resolution = (self.width, self.height)
+            self.rawCapture = PiRGBArray(self.camera, size=self.camera.resolution)
+            logger.info("Camera warm-up..")
+            time.sleep(.5)
+
 
         elif self.setting== 'video':
             self.width = int(config.get('videocamera', 'width'))
@@ -81,7 +86,7 @@ class PicamHandler:
                 self.camera.framerate = int(config.get('videocamera', 'framerate'))
                 self.rawCapture = PiRGBArray(self.camera, size=(self.width, self.height))
             except:
-                print("ERROR: Camera unavailable. Maybe another process is using it?")
+                logger.info("ERROR: Camera unavailable. Maybe another process is using it?")
 
     ### FUNCTIONS FOR IMAGES ###
     def capture(self):
@@ -132,9 +137,9 @@ class PicamHandler:
         if savedir is None:
             savedir = self.imgdir
 
-        self.picpath = f"{savedir}/{self.plateloc}_{self.platedate}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
+        self.picpath = f"{savedir}/{self.plateloc}_{self.platedate}_{self.width}x{self.height}_{str(time.strftime('%Y%m%d%_H%M%S'))}.jpg"
         if len(self.platenotes) > 0:
-            self.picpath = f"{savedir}/{self.plateloc}_{self.platedate}_{self.platenotes}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
+            self.picpath = f"{savedir}/{self.plateloc}_{self.platedate}_{self.platenotes}_{self.width}x{self.height}_{str(time.strftime('%Y%m%d%_H%M%S'))}.jpg"
         cv2.imwrite(self.picpath, self.image)
         if detection:
             assert hasattr(self, 'edged_image'), "No detection performed yet. Run detect() first."

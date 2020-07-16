@@ -57,17 +57,17 @@ def snap_detect():
         # else:
         #     return None
     if len(platedate_str.value):
-        print("Warming up..")
-        print(platedate_str.value)
+        logger.info(f"Plate date set to: {platedate_str.value}")
         phi = PicamHandler(setting='image', currdir_full=currdir_full, plateloc=plateloc_bt.value ,platedate=platedate_str.value, platenotes=platenotes_str.value)
         # phi.capture_and_detect(save=True)
         phi.capture()
         phi.save(detection=False)
-        print("Saved image")
-        disp_img = cv2.cvtColor(phi.image,cv2.COLOR_BGR2RGB) # edged_image if using detections
+        logger.info("Saved image")
+        disp_img = phi.image
+        # disp_img = cv2.cvtColor(phi.image,cv2.COLOR_BGR2RGB) # edged_image if using detections
         disp_img = cv2.resize(disp_img, (640,480))
         pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,2])
-        pic_path.value = phi.picpath
+        pic_path.value = phi.picpath.split('/')[-1]
         del phi
     else:
         app.error(title='Error', text='Is location and date set?')
@@ -180,10 +180,10 @@ def select_date():
 def enter_notes():
     logger.info("Notes button pressed")
     givennotes = app.question("Plate notes", "Give some extra location-notes regarding the plate. e.g. 1-60, centroid etc.")
-    if len(givennotes) < 10:
+    if len(givennotes) <= 10:
         platenotes_str.value = givennotes
     else:
-        app.error(title='Error', text='Length of text provided is too long.')
+        app.error(title='Error', text='Length of text provided is too long. Up to 10 characters allowed.')
 
 # ------------- STOP GUI -------------
 # ------------------------------------
@@ -194,7 +194,7 @@ if __name__=="__main__":
 
     setup_lights()
 
-    app = App(title="SWD Fly trap v0.2", layout="grid", width=width, height=height, bg = background)
+    app = App(title="Photobox v0.1", layout="grid", width=width, height=height, bg = background)
 
     sess = PushButton(app, command=get_folder, text="Select current session folder", grid=[0,0], align='right')
     makedir_bt = PushButton(app, command=create_sess, text="Create new session folder", grid=[1,0], align='right')
@@ -203,7 +203,7 @@ if __name__=="__main__":
     plateloc_bt = ButtonGroup(app, options=platelocations, 
                                     command=select_location, grid=[0,2],
                                     selected="other", align='left')
-    platedate_bt = PushButton(app, text='date', command=select_date, grid=[0,4], align='right')
+    platedate_bt = PushButton(app, text='Plate date', command=select_date, grid=[0,4], align='right')
     platedate_str = Text(app, grid=[1,4], align='left')
 
     platenotes_bt = PushButton(app, text='extra notes (e.g. 3-60 or \"centroid\")', command=enter_notes, grid=[0,3], align='right')
@@ -212,8 +212,8 @@ if __name__=="__main__":
     pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,2])
     
     snap_button = PushButton(app, command=snap_detect, text="Take a picture", grid=[0,5], align='right')
-    pic_path = Text(app, grid=[2,5], align='left')
-    start_video_button = PushButton(app, command=start_video, text="Live Video", grid=[0,4], align='left')
+    pic_path = Text(app, grid=[1,5], align='left')
+    start_video_button = PushButton(app, command=start_video, text="Start Video", grid=[0,4], align='left')
     stop_video_button = PushButton(app, command=stop_video, text="Stop Video", enabled=False, grid=[0,5], align='left')
 
     # shortpreview_bt = PushButton(app, command=camera_preview, text="Camera preview", grid=[0,6], align='left')

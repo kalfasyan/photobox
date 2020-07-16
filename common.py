@@ -39,7 +39,9 @@ if str(config.get('dht22', 'installed')) == "True":
 else:
     dht22_sensor = False
 
-platelocations = ["kampen", 
+platelocations = [
+                "calibration",
+                "kampen", 
                 "beauvech", 
                 "brainelal",
                 "herent", 
