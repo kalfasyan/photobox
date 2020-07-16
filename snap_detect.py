@@ -132,13 +132,13 @@ class PicamHandler:
         if savedir is None:
             savedir = self.imgdir
 
-        ResultName = f"{savedir}/{self.plateloc}_{self.platedate}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
+        self.picpath = f"{savedir}/{self.plateloc}_{self.platedate}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
         if len(self.platenotes) > 0:
-            ResultName = f"{savedir}/{self.plateloc}_{self.platedate}_{self.platenotes}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
-        cv2.imwrite(ResultName, self.image)
+            self.picpath = f"{savedir}/{self.plateloc}_{self.platedate}_{self.platenotes}_{self.width}x{self.height}_{str(time.strftime('%d%m%Y%H%M%S'))}.jpg"
+        cv2.imwrite(self.picpath, self.image)
         if detection:
             assert hasattr(self, 'edged_image'), "No detection performed yet. Run detect() first."
-            cv2.imwrite(f'{ResultName[:-4]}_detection.jpg', self.edged_image)
+            cv2.imwrite(f'{self.picpath[:-4]}_detection.jpg', self.edged_image)
 
     ### FUNCTIONS FOR VIDEO ###
     def _init_video(self, show=False, maxseconds=10):

@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 # ------------- START CAMERA FUNCTIONS -------------
 
 def snap_detect():
+    logger.info("Take picture button pressed")
     if stop_video_button.enabled:
         if yesno("Video Interruption","You can interrupt video and then take a picture.\nInterrupt video?"):
             stop_video()
@@ -65,13 +66,14 @@ def snap_detect():
         print("Saved image")
         disp_img = cv2.cvtColor(phi.image,cv2.COLOR_BGR2RGB) # edged_image if using detections
         disp_img = cv2.resize(disp_img, (640,480))
-        pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,4])
+        pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,2])
+        pic_path.value = phi.picpath
         del phi
     else:
         app.error(title='Error', text='Is location and date set?')
      
 def show_video():
-    print("Warming up")
+    logger.info("Warming up camera to start video.")
     phv = PicamHandler(setting='video', currdir_full=currdir_full)
     time.sleep(1) # warm-up time
     for i, frame in enumerate(phv.camera.capture_continuous(phv.rawCapture, format='bgr', use_video_port=True)):
@@ -94,12 +96,14 @@ def show_video():
 #-----------------------------------------------
 ############ START GUI #########################
 def start_video():
+    logger.info("Starting video..")
     start_video_button.disable()
     stop_video_button.enable()
     t2 = threading.Thread(target=show_video)
     t2.start()
 
 def stop_video():
+    logger.info("Stopping video.")
     start_video_button.enable()
     stop_video_button.disable()
 
@@ -112,10 +116,12 @@ def camera_preview():
     del php
 
 def do_on_close():
+    logger.info("Quit button pressed")
     if yesno("Close", "Are you sure you want to quit?"):
         app.destroy()
 
 def get_folder():
+    logger.info("Select session folder button pressed")
     madedir_str.value = app.select_folder(folder=default_ses_path)
 
     if madedir_str.value == default_ses_path:
@@ -129,7 +135,8 @@ def get_folder():
         currdir_full = madedir_str.value
         madedir_str.value = f"Current session: {madedir_str.value.split('/')[-1]}"
 
-def create_sess():    
+def create_sess():
+    logger.info("Create session button pressed")
     name = app.question("Session folder", "Give a name for the session.")
     if name is not None:
         created_experiment = f'{default_ses_path}/{name}'
@@ -143,7 +150,7 @@ def create_sess():
             app.error(title='Error', text='Session path needs to be a subfolder inside "sessions", e.g. sessions/test1/')
             madedir_str.value = None
         elif not madedir_str.value.startswith(default_ses_path):
-            app.error(title='Error', text='Session path needs to be inside the sessions folder.')
+            app.error(title='Error', text='NOTE: Session path needs to be inside the sessions folder.')
             madedir_str.value = None
         else:
             global currdir_full
@@ -151,7 +158,7 @@ def create_sess():
             madedir_str.value = f"Current session: {madedir_str.value.split('/')[-1]}"
 
 def select_location():
-    print(plateloc_bt.value)
+    logger.info(f"Selected location: {plateloc_bt.value}")
 
 def validate(date_text):
     try:
@@ -162,6 +169,7 @@ def validate(date_text):
     return True
 
 def select_date():
+    logger.info("Date button pressed")
     givendate = app.question("Plate date", "Provide the plate\'s date (e.g. w34 or YYYYMMDD like 20201125).")
     if (givendate.startswith('w') and len(givendate) == 3) or validate(givendate):
         if givendate is not None:
@@ -170,7 +178,8 @@ def select_date():
         app.error(title='Error', text='Date needs to be either in week format: w20 or YYYYMMDD like 20191218.')
 
 def enter_notes():
-    givennotes = app.question("Plate notes", "Give some notes regarding the plate.")
+    logger.info("Notes button pressed")
+    givennotes = app.question("Plate notes", "Give some extra location-notes regarding the plate. e.g. 1-60, centroid etc.")
     if len(givennotes) < 10:
         platenotes_str.value = givennotes
     else:
@@ -194,17 +203,18 @@ if __name__=="__main__":
     plateloc_bt = ButtonGroup(app, options=platelocations, 
                                     command=select_location, grid=[0,2],
                                     selected="other", align='left')
-    platedate_bt = PushButton(app, text='date', command=select_date, grid=[0,2], align='right')
-    platedate_str = Text(app, grid=[1,2], align='left')
+    platedate_bt = PushButton(app, text='date', command=select_date, grid=[0,4], align='right')
+    platedate_str = Text(app, grid=[1,4], align='left')
 
-    platenotes_bt = PushButton(app, text='notes', command=enter_notes, grid=[0,3], align='right')
+    platenotes_bt = PushButton(app, text='extra notes (e.g. 3-60 or \"centroid\")', command=enter_notes, grid=[0,3], align='right')
     platenotes_str = Text(app, grid=[1,3], align='left')
 
-    pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,4])
-
-    snap_button = PushButton(app, command=snap_detect, text="Take a picture", grid=[0,4], align='left')
-    start_video_button = PushButton(app, command=start_video, text="Live Video", grid=[0,5], align='left')
-    stop_video_button = PushButton(app, command=stop_video, text="Stop Video", enabled=False, grid=[0,5], align='right')
+    pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,2])
+    
+    snap_button = PushButton(app, command=snap_detect, text="Take a picture", grid=[0,5], align='right')
+    pic_path = Text(app, grid=[2,5], align='left')
+    start_video_button = PushButton(app, command=start_video, text="Live Video", grid=[0,4], align='left')
+    stop_video_button = PushButton(app, command=stop_video, text="Stop Video", enabled=False, grid=[0,5], align='left')
 
     # shortpreview_bt = PushButton(app, command=camera_preview, text="Camera preview", grid=[0,6], align='left')
 

@@ -17,7 +17,7 @@ def check_dir_location(path=None):
         return False
 
 config = ConfigParser()
-config_path = '/home/pi/Desktop/photobox/config.ini'
+config_path = './config.ini'
 config.read(config_path)
 
 width = int(config.get('app', 'width'))
@@ -39,10 +39,10 @@ if str(config.get('dht22', 'installed')) == "True":
 else:
     dht22_sensor = False
 
-platelocations = ["herent", 
-                "kampen", 
+platelocations = ["kampen", 
                 "beauvech", 
-                "brainelal", 
+                "brainelal",
+                "herent", 
                 "herentVAL1", 
                 "herentVAL2",
                 "herentVAL3",
