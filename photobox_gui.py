@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 # ------------- START CAMERA FUNCTIONS -------------
 
 def snap_detect():
-    logger.info("Take picture button pressed")
     if stop_video_button.enabled:
         if yesno("Video Interruption","You can interrupt video and then take a picture.\nInterrupt video?"):
             stop_video()
@@ -95,6 +94,25 @@ def show_video():
 
 #-----------------------------------------------
 ############ START GUI #########################
+
+def check_calib_done():
+    global currdir_full
+    logger.info(f"Looking for calibration plates in {currdir_full}")
+    if plateloc_bt.value not in ["other", "calibration_chessboard", "calibration_color"]:
+        chessboard_imgs_in_currdir = glob.glob('calibration_chessboard*.jpg')
+        color_img_in_currdir = glob.glob('calibration_color*.jpg')
+
+        if len(chessboard_imgs_in_currdir) < 10 and len(color_img_in_currdir) < 1:
+            app.error(title='Error', text='Please perform calibration first. Minimum of 10 chessboard images and one Color plate image')
+            return False
+    return True
+
+def take_picture():
+    logger.info("Taking picture button pressed")
+    check_calib = check_calib_done()
+    if check_calib:
+        snap_detect()
+
 def start_video():
     logger.info("Starting video..")
     start_video_button.disable()
@@ -211,7 +229,7 @@ if __name__=="__main__":
 
     pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,2])
     
-    snap_button = PushButton(app, command=snap_detect, text="Take a picture", grid=[0,5], align='right')
+    snap_button = PushButton(app, command=take_picture, text="Take a picture", grid=[0,5], align='right')
     pic_path = Text(app, grid=[1,5], align='left')
     start_video_button = PushButton(app, command=start_video, text="Start Video", grid=[0,4], align='left')
     stop_video_button = PushButton(app, command=stop_video, text="Stop Video", enabled=False, grid=[0,5], align='left')

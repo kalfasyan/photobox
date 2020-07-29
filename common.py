@@ -40,7 +40,8 @@ else:
     dht22_sensor = False
 
 platelocations = [
-                "calibration",
+                "calibration_chessboard",
+                "calibration_color",
                 "kampen", 
                 "beauvech", 
                 "brainelal",
