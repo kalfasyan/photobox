@@ -40,12 +40,14 @@ else:
     dht22_sensor = False
 
 platelocations = [
-                "calibration",
-                "kampen", 
-                "beauvech", 
+                "calib",
+                "racour",
+                "inagro",
+                "kampen",
+                "beauvech",
                 "brainelal",
-                "herent", 
-                "herentVAL1", 
+                "herent",
+                "herentVAL1",
                 "herentVAL2",
                 "herentVAL3",
                 "herentVAL4",

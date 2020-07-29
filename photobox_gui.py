@@ -61,10 +61,11 @@ def snap_detect():
         phi = PicamHandler(setting='image', currdir_full=currdir_full, plateloc=plateloc_bt.value ,platedate=platedate_str.value, platenotes=platenotes_str.value)
         # phi.capture_and_detect(save=True)
         phi.capture()
+        phi.detect()
         phi.save(detection=False)
         logger.info("Saved image")
-        disp_img = phi.image
-        # disp_img = cv2.cvtColor(phi.image,cv2.COLOR_BGR2RGB) # edged_image if using detections
+        disp_img = phi.edged_image
+        disp_img = cv2.cvtColor(disp_img, cv2.COLOR_BGR2RGB) # edged_image if using detections, otherwise image
         disp_img = cv2.resize(disp_img, (640,480))
         pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,2])
         pic_path.value = phi.picpath.split('/')[-1]
@@ -79,7 +80,7 @@ def show_video():
     for i, frame in enumerate(phv.camera.capture_continuous(phv.rawCapture, format='bgr', use_video_port=True)):
         print(f'frame: {i}')
         image = frame.array
-        image = cv2.resize(image, (640*2,480*2))
+        image = cv2.resize(image, (1024,576))
         cv2.imshow("Frame", image)
         key = cv2.waitKey(1) & 0xFF
         phv.rawCapture.truncate(0)
