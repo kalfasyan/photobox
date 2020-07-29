@@ -32,6 +32,10 @@ if not os.path.isdir(default_ses_path):
     os.mkdir(default_ses_path)
 if not os.path.isdir(currdir_full):
     os.mkdir(currdir_full)
+imgdir = f"{currdir_full}/images/"
+antdir = f"{currdir_full}/annotations/"
+
+make_dirs([imgdir, antdir])
 
 warnings.simplefilter("once", DeprecationWarning)
 
@@ -50,44 +54,27 @@ logger = logging.getLogger(__name__)
 # ------------- START CAMERA FUNCTIONS -------------
 
 def snap_detect():
-    if stop_video_button.enabled:
-        if yesno("Video Interruption","You can interrupt video and then take a picture.\nInterrupt video?"):
-            stop_video()
-        # else:
-        #     return None
     if len(platedate_str.value):
         logger.info(f"Plate date set to: {platedate_str.value}")
         phi = PicamHandler(setting='image', currdir_full=currdir_full, plateloc=plateloc_bt.value ,platedate=platedate_str.value, platenotes=platenotes_str.value)
         # phi.capture_and_detect(save=True)
         phi.capture()
+        if not plateloc_bt.value.startswith('calibration'):
+            phi.detect()
+            disp_img = phi.edged_image
+        else:
+            disp_img = phi.image
         phi.save(detection=False)
         logger.info("Saved image")
-        disp_img = phi.image
-        # disp_img = cv2.cvtColor(phi.image,cv2.COLOR_BGR2RGB) # edged_image if using detections
+
+        disp_img = cv2.cvtColor(disp_img,cv2.COLOR_BGR2RGB) # edged_image if using detections otherwise image
         disp_img = cv2.resize(disp_img, (640,480))
         pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,2])
         pic_path.value = phi.picpath.split('/')[-1]
         del phi
     else:
         app.error(title='Error', text='Is location and date set?')
-     
-def show_video():
-    logger.info("Warming up camera to start video.")
-    phv = PicamHandler(setting='video', currdir_full=currdir_full)
-    time.sleep(1) # warm-up time
-    for i, frame in enumerate(phv.camera.capture_continuous(phv.rawCapture, format='bgr', use_video_port=True)):
-        print(f'frame: {i}')
-        image = frame.array
-        image = cv2.resize(image, (640*2,480*2))
-        cv2.imshow("Frame", image)
-        key = cv2.waitKey(1) & 0xFF
-        phv.rawCapture.truncate(0)
 
-        if key == ord("q") or not stop_video_button.enabled:
-            phv.camera.close()
-            cv2.destroyAllWindows()
-            del phv
-            break
 
 # ------------- END CAMERA FUNCTIONS -------------
 # ------------------------------------------------
@@ -95,16 +82,40 @@ def show_video():
 #-----------------------------------------------
 ############ START GUI #########################
 
+def update_calib_status():
+    global currdir_full
+    imgdir = f"{currdir_full}/images/"
+    antdir = f"{currdir_full}/annotations/"
+    chessboard_imgs_in_currdir = glob.glob(f'{imgdir}/calibration_chessboard*.jpg')
+    color_img_in_currdir = glob.glob(f'{imgdir}/calibration_color*.jpg')
+    calib_chess_st.value = f"Calib chess: {len(chessboard_imgs_in_currdir)}"
+    calib_color_st.value = f"Calib color: {len(color_img_in_currdir)}"
+    madedir_str.value = currdir_full
+
 def check_calib_done():
     global currdir_full
+    imgdir = f"{currdir_full}/images/"
+    antdir = f"{currdir_full}/annotations/"
+    
+    make_dirs([imgdir, antdir])
     logger.info(f"Looking for calibration plates in {currdir_full}")
     if plateloc_bt.value not in ["other", "calibration_chessboard", "calibration_color"]:
-        chessboard_imgs_in_currdir = glob.glob('calibration_chessboard*.jpg')
-        color_img_in_currdir = glob.glob('calibration_color*.jpg')
+        chessboard_imgs_in_currdir = glob.glob(f'{imgdir}/calibration_chessboard*.jpg')
+        color_img_in_currdir = glob.glob(f'{imgdir}/calibration_color*.jpg')
 
-        if len(chessboard_imgs_in_currdir) < 10 and len(color_img_in_currdir) < 1:
-            app.error(title='Error', text='Please perform calibration first. Minimum of 10 chessboard images and one Color plate image')
+        calib_chess_st.value = f"Calib chess: {len(chessboard_imgs_in_currdir)}"
+        calib_color_st.value = f"Calib color: {len(color_img_in_currdir)}"
+
+        logger.info(f"Chessboard images: {len(chessboard_imgs_in_currdir)}")
+        logger.info(f"Colorplate image: {len(color_img_in_currdir)}")
+
+        if len(chessboard_imgs_in_currdir) < 10 or len(color_img_in_currdir) < 1:
+            app.error(title='Error', text=f'Please perform calibration first. Minimum of 10 chessboard images and one Color plate image. \
+                                            Found {len(chessboard_imgs_in_currdir)} chessboard images and {len(color_img_in_currdir)} color plate(s).')
             return False
+        else:
+            calib_chess_st.value = f"Chessboard images: OK"
+            calib_color_st.value = f"Colorplate images: OK"
     return True
 
 def take_picture():
@@ -112,26 +123,7 @@ def take_picture():
     check_calib = check_calib_done()
     if check_calib:
         snap_detect()
-
-def start_video():
-    logger.info("Starting video..")
-    start_video_button.disable()
-    stop_video_button.enable()
-    t2 = threading.Thread(target=show_video)
-    t2.start()
-
-def stop_video():
-    logger.info("Stopping video.")
-    start_video_button.enable()
-    stop_video_button.disable()
-
-def camera_preview():
-    if stop_video_button.enabled:
-        if yesno("Video Interruption","You can interrupt video and then take a picture.\nInterrupt video?"):
-            stop_video()
-    php = PicamHandler(setting='image', currdir_full=currdir_full)
-    php.preview(seconds=5)
-    del php
+        update_calib_status()
 
 def do_on_close():
     logger.info("Quit button pressed")
@@ -142,15 +134,19 @@ def get_folder():
     logger.info("Select session folder button pressed")
     madedir_str.value = app.select_folder(folder=default_ses_path)
 
-    if madedir_str.value == default_ses_path:
+    default_ses_path_parent = os.path.abspath(os.path.join(default_ses_path, os.pardir))
+    if madedir_str.value == default_ses_path_parent:
         app.error(title='Error', text='Session path needs to be a subfolder.')
         madedir_str.value = None
-    elif not madedir_str.value.startswith(default_ses_path):
+    elif not madedir_str.value.startswith(default_ses_path_parent):
         app.error(title='Error', text='Session path needs to be inside the default sessions folder.')
         madedir_str.value = None
     else:
         global currdir_full
         currdir_full = madedir_str.value
+        imgdir = f"{currdir_full}/images/"
+        antdir = f"{currdir_full}/annotations/"
+        make_dirs([imgdir, antdir])
         madedir_str.value = f"Current session: {madedir_str.value.split('/')[-1]}"
 
 def create_sess():
@@ -158,21 +154,26 @@ def create_sess():
     name = app.question("Session folder", "Give a name for the session.")
     if name is not None:
         created_experiment = f'{default_ses_path}/{name}'
+        logger.info(f"Created path: {created_experiment}")
         make_dirs([created_experiment])
         if not os.path.isdir(default_ses_path):
             os.mkdir(default_ses_path)
 
         madedir_str.value = created_experiment
-
-        if madedir_str.value == default_ses_path:
+        default_ses_path_parent = os.path.abspath(os.path.join(default_ses_path, os.pardir))
+        if madedir_str.value == default_ses_path_parent:
             app.error(title='Error', text='Session path needs to be a subfolder inside "sessions", e.g. sessions/test1/')
             madedir_str.value = None
-        elif not madedir_str.value.startswith(default_ses_path):
+        elif not madedir_str.value.startswith(default_ses_path_parent):
             app.error(title='Error', text='NOTE: Session path needs to be inside the sessions folder.')
             madedir_str.value = None
         else:
             global currdir_full
             currdir_full = madedir_str.value
+            imgdir = f"{currdir_full}/images/"
+            antdir = f"{currdir_full}/annotations/"
+            
+            make_dirs([imgdir, antdir])
             madedir_str.value = f"Current session: {madedir_str.value.split('/')[-1]}"
 
 def select_location():
@@ -231,8 +232,8 @@ if __name__=="__main__":
     
     snap_button = PushButton(app, command=take_picture, text="Take a picture", grid=[0,5], align='right')
     pic_path = Text(app, grid=[1,5], align='left')
-    start_video_button = PushButton(app, command=start_video, text="Start Video", grid=[0,4], align='left')
-    stop_video_button = PushButton(app, command=stop_video, text="Stop Video", enabled=False, grid=[0,5], align='left')
+    calib_chess_st = Text(app, grid=[0,4], align='left')
+    calib_color_st = Text(app, grid=[0,5], align='left')
 
     # shortpreview_bt = PushButton(app, command=camera_preview, text="Camera preview", grid=[0,6], align='left')
 
