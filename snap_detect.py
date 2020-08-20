@@ -52,7 +52,7 @@ class PicamHandler:
     def __init__(self, setting="image", currdir_full=None, plateloc=None, platedate=None, platenotes=''):
         assert setting in ['image', 'video'], "Only image or video accepted."
         self.setting = setting
-        assert check_dir_location(currdir_full), "Wrong base directory for wingbeat sensor."        
+        assert check_dir_location(currdir_full), "Wrong base directory given in snap_detect.py"        
         self.currdir_full = currdir_full
         self.imgdir = f"{currdir_full}/images/"
         self.antdir = f"{currdir_full}/annotations/"
@@ -91,6 +91,10 @@ class PicamHandler:
         self.platename = f"{self.plateloc}_{self.platedate}_{self.width}x{self.height}.jpg"
         if len(self.platenotes) > 0:
             self.platename = f"{self.plateloc}_{self.platedate}_{self.platenotes}_{self.width}x{self.height}.jpg"
+        if self.plateloc.startswith('calibration'):
+            chessboard_imgs_in_currdir = glob.glob(f'{self.imgdir}/calibration_chessboard*.jpg')
+            idx = len(chessboard_imgs_in_currdir)
+            self.platename = f"{self.platename[:-4]}_{idx}.jpg"
 
 
     ### FUNCTIONS FOR IMAGES ###
@@ -123,7 +127,7 @@ class PicamHandler:
 
         # Creating the classes.txt which is mandatory for LabelImg annotation tool
         with open(f"{self.antdir}/classes.txt", "w") as f:
-            f.write('unknown')
+            f.write('unknown\nwmv\nbl\nv(cy)\nv\nt\nk\nweg\n')
 
         yolo_dict = {'label': [], 'x': [], 'y': [], 'width': [], 'height': []}
         for cnt in cnts:
@@ -138,8 +142,10 @@ class PicamHandler:
             except:
                 cy = np.nan
             area = cv2.contourArea(cnt)
+            perimeter = cv2.arcLength(cnt, True)
+            print(f"perimeter: {perimeter}")
 
-            if area > 20:
+            if (20 < area < 150) and (5 < perimeter < 300):
                 if np.nan not in [cx, cy]:
                     print(f"cx: {cx}")
                     print(f"cy: {cy}")
@@ -152,16 +158,13 @@ class PicamHandler:
                     yolo_dict['width'].append(dim / self.width)
                     yolo_dict['height'].append(dim / self.height)
 
-                    # perimeter = cv2.arcLength(cnt, True)
-                    # print(f"perimeter: {perimeter}")
                     # hull = cv2.convexHull(cnt)
                     # print(f"hull: {hull}")
-                    # k = cv2.isContourConvex(cnt)
-                    # print(f"Is contour convex: {k}")
+                    k = cv2.isContourConvex(cnt)
+                    print(f"Is contour convex: {k}")
 
                     x,y,w,h = cv2.boundingRect(cnt)
                     edged_image = cv2.rectangle(edged_image, (x,y), (x+w, y+h), (0,255,0), 2)
-        print(f"yolo_dict: {yolo_dict}")
         df_yolo = pd.DataFrame(yolo_dict)
         df_yolo.to_csv(f"{self.antdir}/{self.platename[:-4]}.txt", sep=' ', index=False, header=False)
 

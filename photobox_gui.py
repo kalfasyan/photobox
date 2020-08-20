@@ -82,36 +82,28 @@ def snap_detect():
 #-----------------------------------------------
 ############ START GUI #########################
 
-def update_calib_status():
+def update_calib_status(nr_calib_plates=False):
     global currdir_full
     imgdir = f"{currdir_full}/images/"
     antdir = f"{currdir_full}/annotations/"
+    make_dirs([imgdir, antdir])
     chessboard_imgs_in_currdir = glob.glob(f'{imgdir}/calibration_chessboard*.jpg')
     color_img_in_currdir = glob.glob(f'{imgdir}/calibration_color*.jpg')
     calib_chess_st.value = f"Calib chess: {len(chessboard_imgs_in_currdir)}"
     calib_color_st.value = f"Calib color: {len(color_img_in_currdir)}"
-    madedir_str.value = currdir_full
+    logger.info(f"Chessboard images: {len(chessboard_imgs_in_currdir)}")
+    logger.info(f"Colorplate image: {len(color_img_in_currdir)}")
+    selected_sesspath.value = currdir_full
+
+    if nr_calib_plates:
+        return len(chessboard_imgs_in_currdir), len(color_img_in_currdir)
 
 def check_calib_done():
-    global currdir_full
-    imgdir = f"{currdir_full}/images/"
-    antdir = f"{currdir_full}/annotations/"
-    
-    make_dirs([imgdir, antdir])
-    logger.info(f"Looking for calibration plates in {currdir_full}")
     if plateloc_bt.value not in ["other", "calibration_chessboard", "calibration_color"]:
-        chessboard_imgs_in_currdir = glob.glob(f'{imgdir}/calibration_chessboard*.jpg')
-        color_img_in_currdir = glob.glob(f'{imgdir}/calibration_color*.jpg')
-
-        calib_chess_st.value = f"Calib chess: {len(chessboard_imgs_in_currdir)}"
-        calib_color_st.value = f"Calib color: {len(color_img_in_currdir)}"
-
-        logger.info(f"Chessboard images: {len(chessboard_imgs_in_currdir)}")
-        logger.info(f"Colorplate image: {len(color_img_in_currdir)}")
-
-        if len(chessboard_imgs_in_currdir) < 10 or len(color_img_in_currdir) < 1:
+        nr_chess_imgs, nr_color_imgs = update_calib_status(nr_calib_plates=True)
+        if nr_chess_imgs < 10 or nr_color_imgs < 1:
             app.error(title='Error', text=f'Please perform calibration first. Minimum of 10 chessboard images and one Color plate image. \
-                                            Found {len(chessboard_imgs_in_currdir)} chessboard images and {len(color_img_in_currdir)} color plate(s).')
+                                            Found {nr_chess_imgs} chessboard images and {nr_color_imgs} color plate(s).')
             return False
         else:
             calib_chess_st.value = f"Chessboard images: OK"
@@ -130,51 +122,61 @@ def do_on_close():
     if yesno("Close", "Are you sure you want to quit?"):
         app.destroy()
 
-def get_folder():
-    logger.info("Select session folder button pressed")
-    madedir_str.value = app.select_folder(folder=default_ses_path)
+def check_session_path(name, created_new=False):
+    if created_new:
+        user_created_sesspath = f'{default_ses_path}/{name}'
+    else:
+        user_created_sesspath = name
 
     default_ses_path_parent = os.path.abspath(os.path.join(default_ses_path, os.pardir))
-    if madedir_str.value == default_ses_path_parent:
-        app.error(title='Error', text='Session path needs to be a subfolder.')
-        madedir_str.value = None
-    elif not madedir_str.value.startswith(default_ses_path_parent):
-        app.error(title='Error', text='Session path needs to be inside the default sessions folder.')
-        madedir_str.value = None
+
+    if len(user_created_sesspath.split('/')) > 6:
+        app.error(title='Error', text='Session path needs to be a subfolder inside "sessions" and cannot be \'images\' or \'annotations\'')
+        return None
+    elif user_created_sesspath.endswith('images') or user_created_sesspath.endswith('annotations'):
+        app.error(title='Error', text='Session path needs to be a subfolder inside "sessions" and cannot be \'images\' or \'annotations\'')
+        return None
+    elif user_created_sesspath.split('/')[-1] == 'sessions':
+        app.error(title='Error', text='Session path needs to be a subfolder inside "sessions"')
+        return None
+    elif user_created_sesspath == default_ses_path_parent:
+        app.error(title='Error', text='Session path needs to be a subfolder inside "sessions", e.g. sessions/test1/')
+        return None
+    elif not user_created_sesspath.startswith(default_ses_path_parent):
+        app.error(title='Error', text='NOTE: Session path needs to be inside the sessions folder.')
+        return None
     else:
+        make_dirs([default_ses_path, user_created_sesspath])
+        logger.info(f"Created path: {user_created_sesspath}")
+        return user_created_sesspath
+
+def get_folder():
+    logger.info("Select session folder button pressed")
+    name = app.select_folder(folder=default_ses_path)
+    selected_sesspath.value = check_session_path(name, created_new=False)
+
+    if selected_sesspath.value is not None:
         global currdir_full
-        currdir_full = madedir_str.value
+        currdir_full = selected_sesspath.value
         imgdir = f"{currdir_full}/images/"
         antdir = f"{currdir_full}/annotations/"
         make_dirs([imgdir, antdir])
-        madedir_str.value = f"Current session: {madedir_str.value.split('/')[-1]}"
+        selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
 
 def create_sess():
     logger.info("Create session button pressed")
     name = app.question("Session folder", "Give a name for the session.")
-    if name is not None:
-        created_experiment = f'{default_ses_path}/{name}'
-        logger.info(f"Created path: {created_experiment}")
-        make_dirs([created_experiment])
-        if not os.path.isdir(default_ses_path):
-            os.mkdir(default_ses_path)
+    selected_sesspath.value = check_session_path(name, created_new=True)
 
-        madedir_str.value = created_experiment
-        default_ses_path_parent = os.path.abspath(os.path.join(default_ses_path, os.pardir))
-        if madedir_str.value == default_ses_path_parent:
-            app.error(title='Error', text='Session path needs to be a subfolder inside "sessions", e.g. sessions/test1/')
-            madedir_str.value = None
-        elif not madedir_str.value.startswith(default_ses_path_parent):
-            app.error(title='Error', text='NOTE: Session path needs to be inside the sessions folder.')
-            madedir_str.value = None
-        else:
-            global currdir_full
-            currdir_full = madedir_str.value
-            imgdir = f"{currdir_full}/images/"
-            antdir = f"{currdir_full}/annotations/"
-            
-            make_dirs([imgdir, antdir])
-            madedir_str.value = f"Current session: {madedir_str.value.split('/')[-1]}"
+    if selected_sesspath.value is not None:
+        global currdir_full
+        currdir_full = selected_sesspath.value
+        imgdir = f"{currdir_full}/images/"
+        antdir = f"{currdir_full}/annotations/"
+        
+        make_dirs([imgdir, antdir])
+        selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
+        platedate_str.value = ''
 
 def select_location():
     logger.info(f"Selected location: {plateloc_bt.value}")
@@ -213,11 +215,11 @@ if __name__=="__main__":
 
     setup_lights()
 
-    app = App(title="Photobox v0.1", layout="grid", width=width, height=height, bg = background)
+    app = App(title="Photobox v0.5", layout="grid", width=width, height=height, bg = background)
 
     sess = PushButton(app, command=get_folder, text="Select current session folder", grid=[0,0], align='right')
     makedir_bt = PushButton(app, command=create_sess, text="Create new session folder", grid=[1,0], align='right')
-    madedir_str = Text(app, grid=[1,0], align='left')
+    selected_sesspath = Text(app, grid=[1,0], align='left')
     
     plateloc_bt = ButtonGroup(app, options=platelocations, 
                                     command=select_location, grid=[0,2],
