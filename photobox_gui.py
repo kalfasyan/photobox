@@ -1,4 +1,6 @@
 #!/home/pi/.virtualenvs/cv/bin/python3
+from stickyplate import StickyPlate, resize_pil_image
+from camera import CameraHandler
 import glob
 import io
 import os
@@ -26,6 +28,8 @@ from guizero import *
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from snap_detect import *
+from camera import *
+from pathlib import Path
 
 currdir_full = f'{default_ses_path}/{datetime.now().strftime("%Y%m%d")}'
 if not os.path.isdir(default_ses_path):
@@ -34,8 +38,10 @@ if not os.path.isdir(currdir_full):
     os.mkdir(currdir_full)
 imgdir = f"{currdir_full}/images/"
 antdir = f"{currdir_full}/annotations/"
+dtcdir = f"{currdir_full}/detections/"
+caldir = f"{default_cal_path}"
 
-make_dirs([imgdir, antdir])
+make_dirs([imgdir, antdir, dtcdir])
 
 warnings.simplefilter("once", DeprecationWarning)
 
@@ -56,22 +62,34 @@ logger = logging.getLogger(__name__)
 def snap_detect():
     if len(platedate_str.value):
         logger.info(f"Plate date set to: {platedate_str.value}")
-        phi = PicamHandler(setting='image', currdir_full=currdir_full, plateloc=plateloc_bt.value ,platedate=platedate_str.value, platenotes=platenotes_str.value)
-        # phi.capture_and_detect(save=True)
-        phi.capture()
+
+        cam = CameraHandler()
+        w, h = cam.camera.resolution
+        plateloc = plateloc_bt.value
+        platedate = platedate_str.value
+        platename = f"{plateloc}_{platedate}_{w}x{h}.png"
+        full_platepath = Path(f"{imgdir}/{platename}")
+
+        cam.capture()
+        cam.save(full_platepath)
+
+        sp = StickyPlate(full_platepath, caldir)
+        sp.undistort(inplace=True)
+        sp.crop_image()
+        sp.threshold_image()
+
         if not plateloc_bt.value.startswith('calibration'):
-            phi.detect()
-            disp_img = phi.edged_image
+            sp.detect_objects()
+            sp.save_detections(savepath=dtcdir)
+            disp_img = sp.pil_image_bboxes
         else:
-            disp_img = phi.image
-        phi.save(detection=False)
+            disp_img = sp.pil_image
+
         logger.info("Saved image")
 
-        disp_img = cv2.cvtColor(disp_img,cv2.COLOR_BGR2RGB) # edged_image if using detections otherwise image
-        disp_img = cv2.resize(disp_img, (640,480))
-        pic_image = Picture(app, image=Image.fromarray(disp_img), grid=[1,2])
-        pic_path.value = phi.picpath.split('/')[-1]
-        del phi
+        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=600), grid=[1,2])
+        pic_path.value = full_platepath
+        del cam
     else:
         app.error(title='Error', text='Is location and date set?')
 
@@ -112,7 +130,7 @@ def check_calib_done():
 
 def take_picture():
     logger.info("Taking picture button pressed")
-    check_calib = check_calib_done()
+    check_calib = True # check_calib_done() 
     if check_calib:
         snap_detect()
         update_calib_status()

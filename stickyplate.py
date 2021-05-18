@@ -8,97 +8,101 @@ import glob
 import time
 from tqdm import tqdm
 from matplotlib import cm
+import logging
 
+logger = logging.getLogger(__name__)
 class StickyPlate(object):
 
     def __init__(self, path, chessboard_dir):
-        self.path = path
-        self.pname = path.split('/')[-1][:-4]
-        self.pil_image = Image.open(path)
+        self.path = str(path)
+        self.pname = self.path.split('/')[-1][:-4]
+        self.pil_image = Image.open(self.path)
         self.image = np.array(self.pil_image)
         self.H, self.W = self.image.shape[:2]
         self.chessboard_dir = chessboard_dir
 
-    def undistort(self, inplace=True, verbose=False):
+    def undistort(self, findpoints=False, inplace=True, verbose=False):
+        logger.info("Undistorting..")
 
-        # termination criteria
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+        if findpoints:
+            # termination criteria
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-        # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
-        objp = np.zeros((7*7,3), np.float32)
-        objp[:,:2] = np.mgrid[0:7,0:7].T.reshape(-1,2) * 10
+            # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+            objp = np.zeros((7*7,3), np.float32)
+            objp[:,:2] = np.mgrid[0:7,0:7].T.reshape(-1,2) * 10
 
-        # Arrays to store object points and image points from all the images.
-        objpoints = [] # 3d point in real world space
-        imgpoints = [] # 2d points in image plane.
+            # Arrays to store object points and image points from all the images.
+            objpoints = [] # 3d point in real world space
+            imgpoints = [] # 2d points in image plane.
 
-        chessboard_images = glob.glob(f'{self.chessboard_dir}/*.jpg')
-        assert len(chessboard_images) > 5, "Too few chessboard images for this session"
-        assert len(chessboard_images) < 18, f"Too many chessboard images ({len(chessboard_images)}) for this session. Maybe not all of them are chessboard images?"
+            chessboard_images = glob.glob(f'{self.chessboard_dir}/*.jpg')
+            assert len(chessboard_images) > 5, "Too few chessboard images for this session"
+            assert len(chessboard_images) < 18, f"Too many chessboard images ({len(chessboard_images)}) for this session. Maybe not all of them are chessboard images?"
 
 
-        """ FINDING CHESSBOARD POINTS """
+            """ FINDING CHESSBOARD POINTS """
 
-        a, b = 7,7 # chessboard dims
-  
-        successes = 0
-        for fpath in tqdm(chessboard_images, desc='Calibrating using the chessboard images..'):
-            fname = fpath.split('/')[-1][:-4]
+            a, b = 7,7 # chessboard dims
+    
+            successes = 0
+            for fpath in tqdm(chessboard_images, desc='Calibrating using the chessboard images..'):
+                fname = fpath.split('/')[-1][:-4]
 
-            if verbose:
-                print(f'\nPROCESSING : {fname}')
-
-            if "color" in fname or "empty" in fname:
-                print("Color image detected. Please use ONLY chessboard images. Ignoring this one.")
-                continue
-
-            assert "calibration" in fname, "Check that you put chessboard images only in this folder."
-
-            t = time.time()
-            img = cv2.imread(fpath)
-            if img is None:
-                raise ValueError("Image not read from opencv")
-            gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-            gray = cv2.bilateralFilter(gray,9,55,55)
-            gray = cv2.medianBlur(gray, 5)
-            gray = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)[1] # threshold = 127  
-
-            # Find the chess board corners
-            ret, corners = cv2.findChessboardCorners(gray, (a,b),None)
-
-            # If found, add object points, image points (after refining them)
-            if ret == True:
-                successes+=1
                 if verbose:
-                    print("SUCCESS: Found points successfully! Adding object points.")
-                
-                objpoints.append(objp)
+                    print(f'\nPROCESSING : {fname}')
 
-                corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
-                imgpoints.append(corners2)
+                if "color" in fname or "empty" in fname:
+                    print("Color image detected. Please use ONLY chessboard images. Ignoring this one.")
+                    continue
 
-                # Draw and display the corners
-                img = cv2.drawChessboardCorners(img, (7,7), corners2,ret)
+                assert "calibration" in fname, "Check that you put chessboard images only in this folder."
+
+                t = time.time()
+                img = cv2.imread(fpath)
+                if img is None:
+                    raise ValueError("Image not read from opencv")
+                gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+                gray = cv2.bilateralFilter(gray,9,55,55)
+                gray = cv2.medianBlur(gray, 5)
+                gray = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)[1] # threshold = 127  
+
+                # Find the chess board corners
+                ret, corners = cv2.findChessboardCorners(gray, (a,b),None)
+
+                # If found, add object points, image points (after refining them)
+                if ret == True:
+                    successes+=1
+                    if verbose:
+                        print("SUCCESS: Found points successfully! Adding object points.")
+                    
+                    objpoints.append(objp)
+
+                    corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
+                    imgpoints.append(corners2)
+
+                    # Draw and display the corners
+                    img = cv2.drawChessboardCorners(img, (7,7), corners2,ret)
+                    if verbose:
+                        cv2.imshow('img',cv2.resize(img, (828, 746)))
+                        cv2.waitKey(100)
+                else:
+                    if verbose:
+                        print("FAILED: Was not able to find the object points.")
                 if verbose:
-                    cv2.imshow('img',cv2.resize(img, (828, 746)))
-                    cv2.waitKey(100)
-            else:
-                if verbose:
-                    print("FAILED: Was not able to find the object points.")
-            if verbose:
-                print(f'Elapsed time for {fname}: {time.time() - t} seconds')
-        
-        cv2.destroyAllWindows()
+                    print(f'Elapsed time for {fname}: {time.time() - t} seconds')
+            
+            cv2.destroyAllWindows()
 
-        if successes < 7:
-            raise KeyError("Not enough chessboard images were processed succesfully..")
+            if successes < 7:
+                raise KeyError("Not enough chessboard images were processed succesfully..")
 
-        """ CAMERA CALIBRATION """
+            """ CAMERA CALIBRATION """
 
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1],None,None)
+            ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1],None,None)
 
-        np.savez(f'{self.chessboard_dir}/calib_params.npz', ret=ret, mtx=mtx, dist=dist,
-                                                rvecs=rvecs, tvecs=tvecs)
+            np.savez(f'{self.chessboard_dir}/calib_params.npz', ret=ret, mtx=mtx, dist=dist,
+                                                    rvecs=rvecs, tvecs=tvecs)
 
         """ UNDISTORTION """
 
@@ -131,6 +135,8 @@ class StickyPlate(object):
             self.pil_undistorted_img = Image.fromarray(dst)
 
     def crop_image(self, height_pxls=100, width_pxls=120):
+        logger.info("Cropping..")
+
         print(f"Original image shape: {self.image.shape}")
         height,width = self.image.shape[:2]
         self.image = self.image[height_pxls:height-height_pxls,
@@ -140,6 +146,8 @@ class StickyPlate(object):
         print(f"New image shape: {self.image.shape}")
 
     def threshold_image(self, threshold=127):
+        logger.info("Thresholding..")
+
         self.gray = cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY)
         self.blurred = cv2.medianBlur(self.gray,5)
 
@@ -150,6 +158,8 @@ class StickyPlate(object):
         self.pil_thresholded = Image.fromarray(th1)
 
     def detect_objects(self, min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150):
+        logger.info("Detecting objects..")
+
         assert hasattr(self, 'thresholded'), "Threshold the image before detecting objects."
         contours = cv2.findContours(self.thresholded, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         contours = contours[0] if len(contours) == 2 else contours[1]
@@ -186,6 +196,14 @@ class StickyPlate(object):
         self.yolo_specs = yolo_specs
 
     def save_detections(self, savepath="./detections/"):
+        logger.info("Saving deteections..")
+
         if not os.path.exists(savepath):
             os.makedirs(savepath)
         save_insect_crops(self.yolo_specs, savepath, self.image)
+
+def resize_pil_image(img, basewidth=300):
+    wpercent = (basewidth/float(img.size[0]))
+    hsize = int((float(img.size[1])*float(wpercent)))
+    img = img.resize((basewidth,hsize), Image.ANTIALIAS)
+    return img

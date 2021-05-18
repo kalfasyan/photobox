@@ -32,6 +32,7 @@ blankimgwidth = int(config.get('app', 'blankimgwidth'))
 assert 800 > blankimgwidth > 100, "Error! Change blankimgwidth dimensions in settings"
 
 default_ses_path = str(config.get('app', 'default_ses_path'))
+default_cal_path = str(config.get('app', 'default_cal_path'))
 
 dht22_pin = int(config.get('dht22', 'pin'))
 if str(config.get('dht22', 'installed')) == "True":
