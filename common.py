@@ -39,18 +39,5 @@ if str(config.get('dht22', 'installed')) == "True":
 else:
     dht22_sensor = False
 
-platelocations = [
-                "calibration_chessboard",
-                "calibration_color",
-                "kampen", 
-                "beauvech", 
-                "brainelal",
-                "herent",
-                "herentVAL1",
-                "herentVAL2",
-                "herentVAL3",
-                "herentVAL4",
-                "herentVAL5",
-                "herentCONTROLE",
-                "herentVALdelta",
-                "other"]
+with open("LOCATIONS.txt", "r") as f:
+    platelocations = f.read().split('\n')
