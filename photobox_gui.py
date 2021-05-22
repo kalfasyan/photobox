@@ -265,6 +265,9 @@ def open_dtcdir():
 def select_location():
     logger.info(f"Selected location: {plateloc_bt.value}")
 
+def select_insect():
+    logger.info(f"Selected insect: {insect_button.value}")
+
 def validate(date_text):
     try:
         datetime.strptime(date_text, '%Y%m%d')
@@ -371,6 +374,10 @@ if __name__=="__main__":
     openval_button      = PushButton(app, text="VALIDATE", command=open_validation_window, grid=[2,7])
     closeval_button     = PushButton(val_window, text="END", command=close_validation_window, align='top')
     val_img             = Picture(val_window, image=Image.new('RGB', (blankimgwidth//2, blankimgheight//2), (0,0,0)), align='top')
+    insect_button       = ButtonGroup(val_window, options=insectoptions, 
+                                    command=select_insect,
+                                    selected="other", 
+                                    align='top')
     next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top')
     prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top')
 

@@ -50,3 +50,6 @@ else:
 
 with open("LOCATIONS.txt", "r") as f:
     platelocations = f.read().split('\n')
+
+with open("INSECTS.txt", "r") as f:
+    insectoptions = f.read().split('\n')

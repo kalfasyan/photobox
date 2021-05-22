@@ -182,6 +182,7 @@ class StickyPlate(object):
             coordinates.append((x,y,x+w, y+h))
 
         self.bbox_coordinates = np.array(coordinates)
+        assert len(coordinates), "No objects detected!"
         pick, idxs = non_max_suppression_fast(self.bbox_coordinates, nms_threshold)
         self.image_bboxes = self.image.copy()
         for i, (startX, startY, endX, endY) in enumerate(pick):
