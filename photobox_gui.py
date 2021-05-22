@@ -1,6 +1,9 @@
 #!/home/pi/.virtualenvs/cv/bin/python3
-from stickyplate import StickyPlate, resize_pil_image
-from camera import CameraHandler
+"""
+Author: Ioannis Kalfas
+PhD Researcher at MeBioS, KU Leuven
+contact: ioannis.kalfas[at]kuleuven.be or kalfasyan[at]gmail.com
+"""
 import glob
 import io
 import os
@@ -10,38 +13,36 @@ import time
 import warnings
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 
 import cv2
 import imutils
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import picamera
+import RPi.GPIO as GPIO
 import scipy.integrate as it
+from guizero import *
+from picamera import PiCamera
+from picamera.array import PiRGBArray
 from PIL import Image
 from scipy.io.wavfile import write
 from scipy.signal import savgol_filter
 
-import picamera
-import RPi.GPIO as GPIO
-from common import *
-from guizero import *
-from picamera import PiCamera
-from picamera.array import PiRGBArray
-from snap_detect import *
 from camera import *
-from pathlib import Path
+from camera import CameraHandler
+from common import *
+from snap_detect import *
+from stickyplate import StickyPlate, resize_pil_image
 
 currdir_full = f'{default_ses_path}/{datetime.now().strftime("%Y%m%d")}'
 if not os.path.isdir(default_ses_path):
     os.mkdir(default_ses_path)
 if not os.path.isdir(currdir_full):
     os.mkdir(currdir_full)
-imgdir = f"{currdir_full}/images/"
-antdir = f"{currdir_full}/annotations/"
-dtcdir = f"{currdir_full}/detections/"
 caldir = f"{default_cal_path}"
-
-make_dirs([imgdir, antdir, dtcdir])
+imgdir, antdir, dtcdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections'])
 
 warnings.simplefilter("once", DeprecationWarning)
 
@@ -59,6 +60,56 @@ logger = logging.getLogger(__name__)
 #---------------------------------------------------
 # ------------- START CAMERA FUNCTIONS -------------
 
+def snap():
+    cam = CameraHandler()
+    w, h = cam.camera.resolution
+    full_platepath = Path(f"{imgdir}/TEST.png")
+
+    cam.capture()
+    cam.save(full_platepath)
+
+    global sp
+    sp = StickyPlate(full_platepath, caldir)
+    sp.undistort(inplace=True)
+
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=620), grid=[1,2])
+    pic_path.value = full_platepath
+
+def segment():
+    try:
+        global sp
+    except:
+        logger.info("Take a picture first.")
+    assert sp.undistorted
+    sp.threshold_image(threshold=127)
+
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_thresholded, basewidth=620), grid=[1,2])
+
+def crop():
+    try:
+        global sp
+    except:
+        logger.info("Take a picture first.")
+    assert sp.undistorted
+    assert not sp.cropped, "Already cropped"
+    sp.crop_image(height_pxls=100, width_pxls=120)
+
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=620), grid=[1,2])
+
+def detect():
+    try:
+        global sp
+    except:
+        logger.info("Take a picture first.")
+
+    assert sp.undistorted
+    assert sp.segmented, "Segment image first"
+    
+    sp.detect_objects(min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150)
+    sp.save_detections(savepath=dtcdir)        
+
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image_bboxes, basewidth=620), grid=[1,2])
+
 def snap_detect():
     if len(platedate_str.value):
         logger.info(f"Plate date set to: {platedate_str.value}")
@@ -66,13 +117,15 @@ def snap_detect():
         cam = CameraHandler()
         w, h = cam.camera.resolution
         plateloc = plateloc_bt.value
+        plateinfo = platenotes_str.value if len(platenotes_str.value) else "NA"
         platedate = platedate_str.value
-        platename = f"{plateloc}_{platedate}_{w}x{h}.png"
+        platename = f"{plateloc}_{plateinfo}_{platedate}_{w}x{h}.png"
         full_platepath = Path(f"{imgdir}/{platename}")
 
         cam.capture()
         cam.save(full_platepath)
 
+        global sp
         sp = StickyPlate(full_platepath, caldir)
         sp.undistort(inplace=True)
         sp.crop_image()
@@ -87,7 +140,7 @@ def snap_detect():
 
         logger.info("Saved image")
 
-        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=600), grid=[1,2])
+        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=620), grid=[1,2])
         pic_path.value = full_platepath
         del cam
     else:
@@ -102,11 +155,9 @@ def snap_detect():
 
 def update_calib_status(nr_calib_plates=False):
     global currdir_full
-    imgdir = f"{currdir_full}/images/"
-    antdir = f"{currdir_full}/annotations/"
-    make_dirs([imgdir, antdir])
-    chessboard_imgs_in_currdir = glob.glob(f'{imgdir}/calibration_chessboard*.jpg')
-    color_img_in_currdir = glob.glob(f'{imgdir}/calibration_color*.jpg')
+
+    chessboard_imgs_in_currdir = glob.glob(f'{caldir}/calibration_chessboard*.jpg')
+    color_img_in_currdir = glob.glob(f'{caldir}/calibration_color*.jpg')
     calib_chess_st.value = f"Calib chess: {len(chessboard_imgs_in_currdir)}"
     calib_color_st.value = f"Calib color: {len(color_img_in_currdir)}"
     logger.info(f"Chessboard images: {len(chessboard_imgs_in_currdir)}")
@@ -176,10 +227,9 @@ def get_folder():
     if selected_sesspath.value is not None:
         global currdir_full
         currdir_full = selected_sesspath.value
-        imgdir = f"{currdir_full}/images/"
-        antdir = f"{currdir_full}/annotations/"
-        make_dirs([imgdir, antdir])
         selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
+        global imgdir, antdir, dtcdir
+        imgdir, antdir, dtcdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections'])
 
 def create_sess():
     logger.info("Create session button pressed")
@@ -189,12 +239,28 @@ def create_sess():
     if selected_sesspath.value is not None:
         global currdir_full
         currdir_full = selected_sesspath.value
-        imgdir = f"{currdir_full}/images/"
-        antdir = f"{currdir_full}/annotations/"
-        
-        make_dirs([imgdir, antdir])
         selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
         platedate_str.value = ''
+        global imgdir, antdir, dtcdir
+        imgdir, antdir, dtcdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections'])
+
+def open_currdir():
+    import subprocess
+    global currdir_full
+    p = subprocess.Popen(["pcmanfm", "%s" % f"{currdir_full}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+
+def open_imgdir():
+    import subprocess
+    global imgdir
+    p = subprocess.Popen(["pcmanfm", "%s" % f"{imgdir}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+
+def open_dtcdir():
+    import subprocess
+    global dtcdir
+    p = subprocess.Popen(["pcmanfm", "%s" % f"{dtcdir}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
 
 def select_location():
     logger.info(f"Selected location: {plateloc_bt.value}")
@@ -224,6 +290,37 @@ def enter_notes():
     else:
         app.error(title='Error', text='Length of text provided is too long. Up to 10 characters allowed.')
 
+def open_validation_window():
+    global dtcdir, detections_list, val_idx
+    val_idx = 0
+    detections_list = [str(fname) for fname in pathlib.Path(dtcdir).glob('**/*.png')]
+    val_img.image = detections_list[val_idx]
+
+    val_window.show()
+
+def close_validation_window():
+    val_window.hide()
+
+def next_val():
+    global dtcdir, detections_list, val_idx
+    print(val_idx)
+    if val_idx < len(detections_list)-1:
+        val_idx+=1
+        val_img.image = detections_list[val_idx]
+    else:
+        val_idx = 0
+        val_img.image = detections_list[val_idx]
+
+def prev_val():
+    global dtcdir, detections_list, val_idx
+    print(val_idx)
+    if val_idx > 0:
+        val_idx-=1
+        val_img.image = detections_list[val_idx]
+    else:
+        val_idx = len(detections_list)-1
+        val_img.image = detections_list[val_idx]
+
 # ------------- STOP GUI -------------
 # ------------------------------------
 
@@ -233,32 +330,49 @@ if __name__=="__main__":
 
     setup_lights()
 
-    app = App(title="Photobox v0.5", layout="grid", width=width, height=height, bg = background)
+    app = App(title="Photobox v0.7", layout="grid", width=width, height=height, bg = background)
 
-    sess = PushButton(app, command=get_folder, text="Select current session folder", grid=[0,0], align='right')
-    makedir_bt = PushButton(app, command=create_sess, text="Create new session folder", grid=[1,0], align='right')
-    selected_sesspath = Text(app, grid=[1,0], align='left')
-    
-    plateloc_bt = ButtonGroup(app, options=platelocations, 
+    # MENU
+    menubar = MenuBar(app, 
+                    toplevel=["File","Open"],
+                    options=[
+                        [ ["Change current session..", get_folder], ["New session..", create_sess] ],
+                        [ ["Open session directory..", open_currdir], 
+                            ["Open image directory..", open_imgdir], 
+                            ["Open detections directory..", open_dtcdir],],
+                            ])
+    # MAIN INTERFACE
+    sess                = Text(app, grid=[0,0], align='right')
+    sess.value          = 'Current session:'
+    selected_sesspath   = Text(app, grid=[1,0], align='left')
+    plateloc_bt         = ButtonGroup(app, options=platelocations, 
                                     command=select_location, grid=[0,2],
                                     selected="other", align='left')
-    platedate_bt = PushButton(app, text='Plate date', command=select_date, grid=[0,4], align='right')
-    platedate_str = Text(app, grid=[1,4], align='left')
+    platenotes_bt       = PushButton(app, text='INFO', command=enter_notes, grid=[0,3], align='right')
+    platenotes_str      = Text(app, grid=[1,3], align='left')
+    platedate_bt        = PushButton(app, text='DATE', command=select_date, grid=[0,4], align='right')
+    platedate_str       = Text(app, grid=[1,4], align='left')
+    pic_image           = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,2])
+    last_img            = Text(app, grid=[0,5], align='right')
+    last_img.value      = "LAST IMAGE:"
+    snapdetect_button   = PushButton(app, command=take_picture, text="FULL RUN", grid=[1,6], align='top')
+    pic_path            = Text(app, grid=[1,5], align='left')
+    stats_box           = Box(app, height='fill', align='left', grid=[2,3])
+    calib_chess_st      = Text(stats_box, align='top')
+    calib_color_st      = Text(stats_box, align='top')
+    imgproc_box         = Box(app, height="fill", align="left", grid=[2,2])
+    snap_button         = PushButton(imgproc_box, command=snap, text="SNAP", align='top')
+    crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top')
+    segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top')
+    detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top')
 
-    platenotes_bt = PushButton(app, text='extra notes (e.g. 3-60 or \"centroid\")', command=enter_notes, grid=[0,3], align='right')
-    platenotes_str = Text(app, grid=[1,3], align='left')
-
-    pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,2])
-    
-    snap_button = PushButton(app, command=take_picture, text="Take a picture", grid=[0,5], align='right')
-    pic_path = Text(app, grid=[1,5], align='left')
-    calib_chess_st = Text(app, grid=[0,4], align='left')
-    calib_color_st = Text(app, grid=[0,5], align='left')
-
-    # shortpreview_bt = PushButton(app, command=camera_preview, text="Camera preview", grid=[0,6], align='left')
-
-    Text(app, text="Click below to quit and end the session.", grid=[1,7], align='right')
-    PushButton(app, command=do_on_close, text='END SESSION', grid=[1,8], align='right')
+    # VALIDATION WINDOW
+    val_window          = Window(app, visible=False, bg='white', title="VALIDATE DETECTIONS")
+    openval_button      = PushButton(app, text="VALIDATE", command=open_validation_window, grid=[2,7])
+    closeval_button     = PushButton(val_window, text="END", command=close_validation_window, align='top')
+    val_img             = Picture(val_window, image=Image.new('RGB', (blankimgwidth//2, blankimgheight//2), (0,0,0)), align='top')
+    next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top')
+    prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top')
 
     app.on_close(do_on_close)
     app.display()

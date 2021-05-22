@@ -10,6 +10,14 @@ def make_dirs(paths=[]):
         if not os.path.exists(p): 
             os.mkdir(p)
 
+def make_session_dirs(curdir='', paths=['images','annotations','detections']):
+    dirs = []
+    for p in paths:
+        dirs.append(f"{curdir}/{p}/")
+
+    make_dirs(dirs)
+    return [i for i in dirs]
+
 def check_dir_location(path=None):
     if isinstance(path, str) and path.startswith(default_ses_path) and path != default_ses_path:
         return True
@@ -21,7 +29,7 @@ config_path = './config.ini'
 config.read(config_path)
 
 width = int(config.get('app', 'width'))
-assert 1000 > width > 500, "App window width dimension error! Change settings"
+assert 1300 > width > 500, "App window width dimension error! Change settings"
 height = int(config.get('app', 'height'))
 assert 1300 > height > 500, "App window height dimension error! Change settings"
 background = config.get('app', 'backgroundcolor')

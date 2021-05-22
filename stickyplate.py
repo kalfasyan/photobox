@@ -20,6 +20,7 @@ class StickyPlate(object):
         self.image = np.array(self.pil_image)
         self.H, self.W = self.image.shape[:2]
         self.chessboard_dir = chessboard_dir
+        self.cropped = False
 
     def undistort(self, findpoints=False, inplace=True, verbose=False):
         logger.info("Undistorting..")
@@ -127,6 +128,8 @@ class StickyPlate(object):
         x,y,w,h = roi
         dst = dst[y:y+h, x:x+w]
 
+        self.undistorted = True
+
         if inplace:
             self.pil_image = Image.fromarray(dst)
             self.image = dst
@@ -143,6 +146,9 @@ class StickyPlate(object):
                                 width_pxls:width-width_pxls]
         self.pil_image = Image.fromarray(self.image)
         self.H, self.W = self.image.shape[:2]
+
+        self.cropped = True
+
         print(f"New image shape: {self.image.shape}")
 
     def threshold_image(self, threshold=127):
@@ -154,8 +160,10 @@ class StickyPlate(object):
         ret,th1 = cv2.threshold(self.blurred,threshold,255,cv2.THRESH_BINARY)
         kernel = np.ones((3,3), np.uint8)
         th1 = cv2.dilate(th1, kernel, iterations=1)
+
         self.thresholded = th1
         self.pil_thresholded = Image.fromarray(th1)
+        self.segmented = True
 
     def detect_objects(self, min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150):
         logger.info("Detecting objects..")
