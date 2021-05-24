@@ -14,6 +14,7 @@ import warnings
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from natsort import natsorted
 
 import cv2
 import imutils
@@ -34,7 +35,9 @@ from camera import *
 from camera import CameraHandler
 from common import *
 from snap_detect import *
+from lights import *
 from stickyplate import StickyPlate, resize_pil_image
+from detections import *
 
 currdir_full = f'{default_ses_path}/{datetime.now().strftime("%Y%m%d")}'
 if not os.path.isdir(default_ses_path):
@@ -72,7 +75,7 @@ def snap():
     sp = StickyPlate(full_platepath, caldir)
     sp.undistort(inplace=True)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=620), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-500), grid=[1,2])
     pic_path.value = full_platepath
 
 def segment():
@@ -83,7 +86,7 @@ def segment():
     assert sp.undistorted
     sp.threshold_image(threshold=127)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_thresholded, basewidth=620), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_thresholded, basewidth=appwidth-500), grid=[1,2])
 
 def crop():
     try:
@@ -94,7 +97,7 @@ def crop():
     assert not sp.cropped, "Already cropped"
     sp.crop_image(height_pxls=100, width_pxls=120)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=620), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-500), grid=[1,2])
 
 def detect():
     try:
@@ -108,7 +111,28 @@ def detect():
     sp.detect_objects(min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150)
     sp.save_detections(savepath=dtcdir)        
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image_bboxes, basewidth=620), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image_bboxes, basewidth=appwidth-500), grid=[1,2])
+
+def predict():
+    try:
+        global sp
+    except:
+        logger.info("Take a picture first.")
+
+    assert sp.undistorted
+    assert sp.segmented, "Segment image first"
+    assert sp.detected, "Detect objects first"
+
+    global model, dtcdir, md
+    md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-1])
+    md.create_data_generator()
+    md.get_predictions(model, sp)
+    disp_img = overlay_yolo(md.df, sp.image, insectoptions)
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-500), grid=[1,2])
+
+    global df_vals
+    df_vals = pd.merge(md.df, sp.yolo_specs, on='insect_id')
+    df_vals['user_input'] = 'INSECT'
 
 def snap_detect():
     if len(platedate_str.value):
@@ -140,7 +164,7 @@ def snap_detect():
 
         logger.info("Saved image")
 
-        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=620), grid=[1,2])
+        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=appwidth-500), grid=[1,2])
         pic_path.value = full_platepath
         del cam
     else:
@@ -179,7 +203,7 @@ def check_calib_done():
             calib_color_st.value = f"Colorplate images: OK"
     return True
 
-def take_picture():
+def full_run():
     logger.info("Taking picture button pressed")
     check_calib = True # check_calib_done() 
     if check_calib:
@@ -266,7 +290,10 @@ def select_location():
     logger.info(f"Selected location: {plateloc_bt.value}")
 
 def select_insect():
+    global detections_list, val_idx, insect_idx, df_vals
     logger.info(f"Selected insect: {insect_button.value}")
+    df_vals.at[insect_idx, 'user_input'] = insect_button.value
+    print(df_vals[['insect_id','prediction','user_input']])
 
 def validate(date_text):
     try:
@@ -293,11 +320,16 @@ def enter_notes():
     else:
         app.error(title='Error', text='Length of text provided is too long. Up to 10 characters allowed.')
 
+
 def open_validation_window():
-    global dtcdir, detections_list, val_idx
+    assert 'df_vals' in globals(), "You need to first perform model inference to create predictions."
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals
     val_idx = 0
-    detections_list = [str(fname) for fname in pathlib.Path(dtcdir).glob('**/*.png')]
+    detections_list = natsorted([str(fname) for fname in pathlib.Path(dtcdir).glob('**/*.png')])
     val_img.image = detections_list[val_idx]
+    insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
+    detectioninfo_str.value = f'Detection #:{insect_idx}, Predicted:{df_vals.loc[insect_idx].prediction}'
+    insect_button.value = df_vals.loc[insect_idx].user_input
 
     val_window.show()
 
@@ -305,24 +337,40 @@ def close_validation_window():
     val_window.hide()
 
 def next_val():
-    global dtcdir, detections_list, val_idx
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals
     print(val_idx)
+    print(insect_button.value)
     if val_idx < len(detections_list)-1:
         val_idx+=1
         val_img.image = detections_list[val_idx]
     else:
         val_idx = 0
         val_img.image = detections_list[val_idx]
+    print(detections_list[val_idx])
+    insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
+    detectioninfo_str.value = f'Detection #:{insect_idx}, Predicted:{df_vals.loc[insect_idx].prediction}'
+    insect_button.value = df_vals.loc[insect_idx].user_input
 
 def prev_val():
-    global dtcdir, detections_list, val_idx
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals
     print(val_idx)
+    print(insect_button.value)
     if val_idx > 0:
         val_idx-=1
         val_img.image = detections_list[val_idx]
     else:
         val_idx = len(detections_list)-1
         val_img.image = detections_list[val_idx]
+    print(detections_list[val_idx])
+    insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
+    detectioninfo_str.value = f'Detection #:{insect_idx}, Predicted:{df_vals.loc[insect_idx].prediction}'
+    insect_button.value = df_vals.loc[insect_idx].user_input
+
+def load_model_in_memory():
+    logger.info("Loading Insect-Model in memory..")
+    global model, md, dtcdir
+    md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-1])
+    model = InsectModel('insectmodel.h5', md.img_dim, len(md.target_classes)).load()
 
 # ------------- STOP GUI -------------
 # ------------------------------------
@@ -332,52 +380,74 @@ def prev_val():
 if __name__=="__main__":
 
     setup_lights()
+    load_model_in_memory()
 
-    app = App(title="Photobox v0.7", layout="grid", width=width, height=height, bg = background)
+    app = App(title="Photobox v0.8", layout="grid", width=appwidth, height=appheight, bg = background)
 
     # MENU
-    menubar = MenuBar(app, 
-                    toplevel=["File","Open"],
-                    options=[
-                        [ ["Change current session..", get_folder], ["New session..", create_sess] ],
-                        [ ["Open session directory..", open_currdir], 
-                            ["Open image directory..", open_imgdir], 
-                            ["Open detections directory..", open_dtcdir],],
-                            ])
+    menubar             = MenuBar(app, 
+                                toplevel=["File","Open"],
+                                options=[
+                                    [ ["Change current session..", get_folder], 
+                                        ["New session..", create_sess] ],
+                                    [ ["Open session directory..", open_currdir], 
+                                        ["Open image directory..", open_imgdir], 
+                                        ["Open detections directory..", open_dtcdir] ],
+                                        ]
+                                    )
+
+    # MAIN IMG PROCESSING BOX
+    imgproc_box         = Box(app, height="fill", align="right", grid=[0,2])
+    space1              = Drawing(imgproc_box, align='top')
+    space1.rectangle(10,10,60,60, color=background)
+    snap_button         = PushButton(imgproc_box, command=snap, text="CAPTURE", align='top')
+    crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top')
+    segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top')
+    detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top')
+    predict_button      = PushButton(imgproc_box, command=predict, text="PREDICT", align='top')
+    space2              = Drawing(imgproc_box, align='top')
+    space2.rectangle(10,10,60,60, color=background)
+    
+
     # MAIN INTERFACE
     sess                = Text(app, grid=[0,0], align='right')
     sess.value          = 'Current session:'
     selected_sesspath   = Text(app, grid=[1,0], align='left')
-    plateloc_bt         = ButtonGroup(app, options=platelocations, 
-                                    command=select_location, grid=[0,2],
-                                    selected="other", align='left')
-    platenotes_bt       = PushButton(app, text='INFO', command=enter_notes, grid=[0,3], align='right')
-    platenotes_str      = Text(app, grid=[1,3], align='left')
-    platedate_bt        = PushButton(app, text='DATE', command=select_date, grid=[0,4], align='right')
-    platedate_str       = Text(app, grid=[1,4], align='left')
+    plateloc_bt         = Combo(app, 
+                                        options=platelocations, 
+                                        command=select_location, 
+                                        selected="LOCATION", 
+                                        grid=[0,3],
+                                        align='right')    
+    platenotes_bt       = PushButton(app, text='INFO', command=enter_notes, grid=[0,4], align='right')
+    platenotes_str      = Text(app, grid=[1,4], align='left')
+    platedate_bt        = PushButton(app, text='DATE', command=select_date, grid=[0,5], align='right')
+    platedate_str       = Text(app, grid=[1,5], align='left')
     pic_image           = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,2])
-    last_img            = Text(app, grid=[0,5], align='right')
+    last_img            = Text(app, grid=[0,6], align='right')
     last_img.value      = "LAST IMAGE:"
-    snapdetect_button   = PushButton(app, command=take_picture, text="FULL RUN", grid=[1,6], align='top')
-    pic_path            = Text(app, grid=[1,5], align='left')
+    pic_path            = Text(app, grid=[1,6], align='left')
     stats_box           = Box(app, height='fill', align='left', grid=[2,3])
     calib_chess_st      = Text(stats_box, align='top')
     calib_color_st      = Text(stats_box, align='top')
-    imgproc_box         = Box(app, height="fill", align="left", grid=[2,2])
-    snap_button         = PushButton(imgproc_box, command=snap, text="SNAP", align='top')
-    crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top')
-    segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top')
-    detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top')
+    
+    # FULLRUN BOX
+    fullrun_box         = Box(app, width="fill", align="right", grid=[1,3])
+    openval_button      = PushButton(fullrun_box, command=open_validation_window, text="3. VALIDATE PREDICTIONS", align='right')
+    predict_bt          = PushButton(fullrun_box, command=predict, text="2. INSECT MODEL INFERENCE", align='right')
+    fullrun_bt          = PushButton(fullrun_box, command=full_run, text="1. PROCESS STICKY PLATE", align='right')
 
     # VALIDATION WINDOW
     val_window          = Window(app, visible=False, bg='white', title="VALIDATE DETECTIONS")
-    openval_button      = PushButton(app, text="VALIDATE", command=open_validation_window, grid=[2,7])
+    
     closeval_button     = PushButton(val_window, text="END", command=close_validation_window, align='top')
     val_img             = Picture(val_window, image=Image.new('RGB', (blankimgwidth//2, blankimgheight//2), (0,0,0)), align='top')
-    insect_button       = ButtonGroup(val_window, options=insectoptions, 
+    insect_button       = Combo(val_window, options=insectoptions, 
                                     command=select_insect,
-                                    selected="other", 
+                                    selected="INSECT", 
                                     align='top')
+    detectioninfo_str   = Text(val_window, align='bottom')
+    detectioninfo_str.value = 'Detection #:?'
     next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top')
     prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top')
 

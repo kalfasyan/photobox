@@ -11,4 +11,4 @@ herentVAL4
 herentVAL5
 herentCONTROLE
 herentVALdelta
-other
+LOCATION

@@ -57,9 +57,7 @@ class ModelDetections(object):
         df['uncertain'] = df[self.target_classes].max(axis=1) < certainty_threshold
         df['class'] = 'na'
         df['top_prob'] = df[self.target_classes].max(axis=1)
-        df = df[['class','insect_id', 'prediction','uncertain','top_prob', 'bl', 'c', 'k', 'm', 'sw', 't',
-            'v', 'wmv', 'yolo_x', 'yolo_y', 'yolo_width', 'yolo_height', 'pname',
-                'filepath']]
+
 
         self.df = df.sort_values(
             by="insect_id",

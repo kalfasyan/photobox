@@ -17,36 +17,6 @@ logger = logging.getLogger(__name__)
 config = ConfigParser()
 config.read(config_path)
 
-############### LIGHTS #######################
-LEDpin = int(config.get('lights', 'LEDpin'))
-lights_on = config.get('lights', 'withlights') in ['True','true','Y','y','yes','Yes','YES']
-
-def setup_lights(on=lights_on):
-    if on:
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(LEDpin, GPIO.OUT)
-        GPIO.output(LEDpin, GPIO.LOW)
-    else:
-        logger.debug("LIGHTS SETUP: Lights are not enabled.")
-
-def switch_off_lights(on=lights_on):
-    if on:
-        GPIO.output(LEDpin, GPIO.LOW)
-    else:
-        logger.debug("LIGHTS OFF: Lights are not enabled.")
-
-def switch_on_lights(on=lights_on):
-    if on:
-        GPIO.output(LEDpin, GPIO.HIGH)
-    else:
-        logger.debug("LIGHTS ON: Lights are not enabled.")
-
-def clear_lights(on=lights_on):
-    if on:
-        GPIO.cleanup()
-    else:
-        logger.debug("LIGHTS CLEANUP: Lights are not enabled.")
-###############################################
 
 class PicamHandler:
     def __init__(self, setting="image", currdir_full=None, plateloc=None, platedate=None, platenotes=''):

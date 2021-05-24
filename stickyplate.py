@@ -203,6 +203,7 @@ class StickyPlate(object):
         yolo_specs['pname'] = self.pname
         yolo_specs['insect_id'] = yolo_specs.index.values.astype(str)    
         self.yolo_specs = yolo_specs
+        self.detected = True
 
     def save_detections(self, savepath="./detections/"):
         logger.info("Saving deteections..")
