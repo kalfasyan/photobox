@@ -15,6 +15,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 from natsort import natsorted
+from logging.handlers import RotatingFileHandler
 
 import cv2
 import imutils
@@ -52,11 +53,14 @@ warnings.simplefilter("once", DeprecationWarning)
 # -------------------------------------------------
 # ------------- LOGGER CONFIG ---------------------
 
-logging.basicConfig(level=logging.DEBUG, 
+streamhandler = logging.StreamHandler()
+streamhandler.terminator = "\n"
+logging.basicConfig(level=logging.INFO, 
                     format="%(asctime)s [%(levelname)s] %(message)s",
                     handlers=[
-                        logging.FileHandler('traplogs.log'),
-                        logging.StreamHandler()])
+                        RotatingFileHandler(f'{default_log_path}/photobox_logs.log',
+                                            maxBytes=50000000, backupCount=50),
+                        streamhandler])
 
 logger = logging.getLogger(__name__)
 
@@ -396,23 +400,12 @@ if __name__=="__main__":
                                         ]
                                     )
 
-    # MAIN IMG PROCESSING BOX
-    imgproc_box         = Box(app, height="fill", align="right", grid=[0,2])
-    space1              = Drawing(imgproc_box, align='top')
-    space1.rectangle(10,10,60,60, color=background)
-    snap_button         = PushButton(imgproc_box, command=snap, text="CAPTURE", align='top')
-    crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top')
-    segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top')
-    detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top')
-    predict_button      = PushButton(imgproc_box, command=predict, text="PREDICT", align='top')
-    space2              = Drawing(imgproc_box, align='top')
-    space2.rectangle(10,10,60,60, color=background)
-    
 
     # MAIN INTERFACE
     sess                = Text(app, grid=[0,0], align='right')
     sess.value          = 'Current session:'
     selected_sesspath   = Text(app, grid=[1,0], align='left')
+    selected_sesspath.after(1, create_sess)
     plateloc_bt         = Combo(app, 
                                         options=platelocations, 
                                         command=select_location, 
@@ -430,16 +423,33 @@ if __name__=="__main__":
     stats_box           = Box(app, height='fill', align='left', grid=[2,3])
     calib_chess_st      = Text(stats_box, align='top')
     calib_color_st      = Text(stats_box, align='top')
-    
+
+
+    # MAIN IMG PROCESSING BOX
+    imgproc_box         = Box(app, height="fill", align="right", grid=[0,2])
+
+    space1              = Drawing(imgproc_box, align='top')
+    space1.rectangle(10,10,60,60, color=background)
+    snap_button         = PushButton(imgproc_box, command=snap, text="CAPTURE", align='top')
+    crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top')
+    segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top')
+    detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top')
+    predict_button      = PushButton(imgproc_box, command=predict, text="PREDICT", align='top')
+    space2              = Drawing(imgproc_box, align='top')
+    space2.rectangle(10,10,60,60, color=background)
+
+
     # FULLRUN BOX
     fullrun_box         = Box(app, width="fill", align="right", grid=[1,3])
+    
     openval_button      = PushButton(fullrun_box, command=open_validation_window, text="3. VALIDATE PREDICTIONS", align='right')
     predict_bt          = PushButton(fullrun_box, command=predict, text="2. INSECT MODEL INFERENCE", align='right')
     fullrun_bt          = PushButton(fullrun_box, command=full_run, text="1. PROCESS STICKY PLATE", align='right')
 
+
     # VALIDATION WINDOW
     val_window          = Window(app, visible=False, bg='white', title="VALIDATE DETECTIONS")
-    
+
     closeval_button     = PushButton(val_window, text="END", command=close_validation_window, align='top')
     val_img             = Picture(val_window, image=Image.new('RGB', (blankimgwidth//2, blankimgheight//2), (0,0,0)), align='top')
     insect_button       = Combo(val_window, options=insectoptions, 
@@ -451,5 +461,5 @@ if __name__=="__main__":
     next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top')
     prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top')
 
-    app.on_close(do_on_close)
+    app.when_closed = do_on_close
     app.display()
