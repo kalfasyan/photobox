@@ -118,3 +118,12 @@ def overlay_yolo(specifications, plate_img, class_selection):
                 cv2.rectangle(plate_img, (left, top), (right, bot), (255, 255, 0), 2)
                 cv2.putText(plate_img, f"{row.insect_id},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0,255,0), 2)
     return plate_img
+
+def get_cpu_temperature():
+    import subprocess
+    import re
+    tmp = subprocess.check_output(["vcgencmd measure_temp"], shell=True)
+    cputemp = tmp.decode('ascii')
+    cputemp = re.findall("\d+", cputemp)
+    cputemp = '.'.join(cputemp)
+    return cputemp

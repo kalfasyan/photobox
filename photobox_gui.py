@@ -15,6 +15,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 from natsort import natsorted
+import subprocess
 from logging.handlers import RotatingFileHandler
 
 import cv2
@@ -33,13 +34,17 @@ from scipy.io.wavfile import write
 from scipy.signal import savgol_filter
 
 from camera import *
-from camera import CameraHandler
 from common import *
 from snap_detect import *
 from lights import *
 from stickyplate import StickyPlate, resize_pil_image
 from detections import *
+from utils import get_cpu_temperature
 
+global cpu_temperature
+cpu_temperature = 'NA'
+
+global default_log_path, default_ses_path, default_cal_path, caldir, default_prj_path
 currdir_full = f'{default_ses_path}/{datetime.now().strftime("%Y%m%d")}'
 if not os.path.isdir(default_ses_path):
     os.mkdir(default_ses_path)
@@ -53,12 +58,13 @@ warnings.simplefilter("once", DeprecationWarning)
 # -------------------------------------------------
 # ------------- LOGGER CONFIG ---------------------
 
+logdate = datetime.now().strftime("%Y%m%d")
 streamhandler = logging.StreamHandler()
 streamhandler.terminator = "\n"
 logging.basicConfig(level=logging.INFO, 
                     format="%(asctime)s [%(levelname)s] %(message)s",
                     handlers=[
-                        RotatingFileHandler(f'{default_log_path}/photobox_logs.log',
+                        RotatingFileHandler(f'{default_log_path}/photobox_logs_{logdate}.log',
                                             maxBytes=50000000, backupCount=50),
                         streamhandler])
 
@@ -79,7 +85,7 @@ def snap():
     sp = StickyPlate(full_platepath, caldir)
     sp.undistort(inplace=True)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-500), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
     pic_path.value = full_platepath
 
 def segment():
@@ -90,7 +96,7 @@ def segment():
     assert sp.undistorted
     sp.threshold_image(threshold=127)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_thresholded, basewidth=appwidth-500), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_thresholded, basewidth=appwidth-450), grid=[1,2])
 
 def crop():
     try:
@@ -101,7 +107,7 @@ def crop():
     assert not sp.cropped, "Already cropped"
     sp.crop_image(height_pxls=100, width_pxls=120)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-500), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
 
 def detect():
     try:
@@ -115,7 +121,7 @@ def detect():
     sp.detect_objects(min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150)
     sp.save_detections(savepath=dtcdir)        
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image_bboxes, basewidth=appwidth-500), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image_bboxes, basewidth=appwidth-450), grid=[1,2])
 
 def predict():
     try:
@@ -132,7 +138,7 @@ def predict():
     md.create_data_generator()
     md.get_predictions(model, sp)
     disp_img = overlay_yolo(md.df, sp.image, insectoptions)
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-500), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-450), grid=[1,2])
 
     global df_vals
     df_vals = pd.merge(md.df, sp.yolo_specs, on='insect_id')
@@ -168,7 +174,7 @@ def snap_detect():
 
         logger.info("Saved image")
 
-        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=appwidth-500), grid=[1,2])
+        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=appwidth-450), grid=[1,2])
         pic_path.value = full_platepath
         del cam
     else:
@@ -273,21 +279,28 @@ def create_sess():
         imgdir, antdir, dtcdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections'])
 
 def open_currdir():
-    import subprocess
     global currdir_full
     p = subprocess.Popen(["pcmanfm", "%s" % f"{currdir_full}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     p.communicate()
 
 def open_imgdir():
-    import subprocess
     global imgdir
     p = subprocess.Popen(["pcmanfm", "%s" % f"{imgdir}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     p.communicate()
 
 def open_dtcdir():
-    import subprocess
     global dtcdir
     p = subprocess.Popen(["pcmanfm", "%s" % f"{dtcdir}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+
+def open_logdir():
+    global default_log_path
+    p = subprocess.Popen(["pcmanfm", "%s" % f"{default_log_path}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+
+def open_projectdir():
+    global default_prj_path
+    p = subprocess.Popen(["pcmanfm", "%s" % f"{default_prj_path}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     p.communicate()
 
 def select_location():
@@ -376,6 +389,14 @@ def load_model_in_memory():
     md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-1])
     model = InsectModel('insectmodel.h5', md.img_dim, len(md.target_classes)).load()
 
+def get_stats():
+    logger.debug("Attempting to get cpu temperature")
+    global cpu_temperature
+    cpu_temperature = get_cpu_temperature()
+    cputemp_st.value = f"CPUtemp: {cpu_temperature}"
+
+
+
 # ------------- STOP GUI -------------
 # ------------------------------------
 
@@ -392,12 +413,17 @@ if __name__=="__main__":
     menubar             = MenuBar(app, 
                                 toplevel=["File","Open"],
                                 options=[
-                                    [ ["Change current session..", get_folder], 
-                                        ["New session..", create_sess] ],
-                                    [ ["Open session directory..", open_currdir], 
+                                    [ 
+                                        ["Change current session..", get_folder], 
+                                        ["New session..", create_sess] 
+                                    ],
+                                    [ 
+                                        ["Open session directory..", open_currdir], 
                                         ["Open image directory..", open_imgdir], 
-                                        ["Open detections directory..", open_dtcdir] ],
-                                        ]
+                                        ["Open detections directory..", open_dtcdir],
+                                        ["Open logs directory..", open_logdir] ,  
+                                        ["Open project directory..(to change locations, insects)", open_projectdir], 
+                                    ], ]                        
                                     )
 
 
@@ -420,9 +446,16 @@ if __name__=="__main__":
     last_img            = Text(app, grid=[0,6], align='right')
     last_img.value      = "LAST IMAGE:"
     pic_path            = Text(app, grid=[1,6], align='left')
-    stats_box           = Box(app, height='fill', align='left', grid=[2,3])
+
+
+    # STATS BOX
+    stats_box           = Box(app, height='fill', align='right', grid=[2,4])
     calib_chess_st      = Text(stats_box, align='top')
     calib_color_st      = Text(stats_box, align='top')
+    cputemp_st          = Text(stats_box, align='top')
+    cputemp_st.value    = f"CPUtemp: {cpu_temperature}"
+    cputemp_st.repeat(5000, get_stats)
+    calib_color_st.after(2, update_calib_status)
 
 
     # MAIN IMG PROCESSING BOX
