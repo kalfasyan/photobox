@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 config.read(config_path)
 
 LEDpin = int(config.get('lights', 'LEDpin'))
-lights_on = config.get('lights', 'withlights') in ['True','true','Y','y','yes','Yes','YES']
+lights_on = config.get('lights', 'managedlights') in ['True','true','Y','y','yes','Yes','YES']
 
 def setup_lights(on=lights_on):
     if on:

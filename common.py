@@ -10,6 +10,14 @@ def make_dirs(paths=[]):
         if not os.path.exists(p): 
             os.mkdir(p)
 
+def make_session_dirs(curdir='', paths=['images','annotations','detections']):
+    dirs = []
+    for p in paths:
+        dirs.append(f"{curdir}/{p}/")
+
+    make_dirs(dirs)
+    return [i for i in dirs]
+
 def check_dir_location(path=None):
     if isinstance(path, str) and path.startswith(default_ses_path) and path != default_ses_path:
         return True
@@ -20,18 +28,21 @@ config = ConfigParser()
 config_path = './config.ini'
 config.read(config_path)
 
-width = int(config.get('app', 'width'))
-assert 1000 > width > 500, "App window width dimension error! Change settings"
-height = int(config.get('app', 'height'))
-assert 1300 > height > 500, "App window height dimension error! Change settings"
+# APP DIMENSIONS
+appwidth = int(config.get('app', 'width'))
+appheight = int(config.get('app', 'height'))
 background = config.get('app', 'backgroundcolor')
-assert background in ['white','black','red','green','blue','yellow'], "Error! Wrong background color given in settings"
 blankimgheight = int(config.get('app', 'blankimgheight'))
-assert 800 > blankimgheight > 100, "Error! Change blankimgheight dimensions in settings"
 blankimgwidth = int(config.get('app', 'blankimgwidth'))
-assert 800 > blankimgwidth > 100, "Error! Change blankimgwidth dimensions in settings"
 
 default_ses_path = str(config.get('app', 'default_ses_path'))
+default_log_path = str(config.get('app', 'default_log_path'))
+default_cal_path = str(config.get('app', 'default_cal_path'))
+default_prj_path = str(config.get('app', 'default_prj_path'))
+
+for p in [default_cal_path, default_log_path, default_ses_path]:
+    if not os.path.exists(p):
+        os.makedirs(p)
 
 dht22_pin = int(config.get('dht22', 'pin'))
 if str(config.get('dht22', 'installed')) == "True":
@@ -39,18 +50,8 @@ if str(config.get('dht22', 'installed')) == "True":
 else:
     dht22_sensor = False
 
-platelocations = [
-                "calibration_chessboard",
-                "calibration_color",
-                "kampen", 
-                "beauvech", 
-                "brainelal",
-                "herent",
-                "herentVAL1",
-                "herentVAL2",
-                "herentVAL3",
-                "herentVAL4",
-                "herentVAL5",
-                "herentCONTROLE",
-                "herentVALdelta",
-                "other"]
+with open("LOCATIONS.txt", "r") as f:
+    platelocations = f.read().split('\n')
+
+with open("INSECTS.txt", "r") as f:
+    insectoptions = f.read().split('\n')
