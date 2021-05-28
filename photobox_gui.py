@@ -40,6 +40,8 @@ from lights import *
 from stickyplate import StickyPlate, resize_pil_image
 from detections import *
 from utils import get_cpu_temperature
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 global cpu_temperature
 cpu_temperature = 'NA'
@@ -83,10 +85,19 @@ def snap():
 
     global sp
     sp = StickyPlate(full_platepath, caldir)
-    sp.undistort(inplace=True)
 
     pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
     pic_path.value = full_platepath
+
+def calibrate():
+    try:
+        global sp
+    except:
+        logger.info("Take a picture first.")
+    sp.undistort(inplace=True)
+    sp.colorcorrect(inplace=True)
+
+    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
 
 def segment():
     try:
@@ -162,6 +173,7 @@ def snap_detect():
         global sp
         sp = StickyPlate(full_platepath, caldir)
         sp.undistort(inplace=True)
+        sp.colorcorrect(inplace=True)
         sp.crop_image()
         sp.threshold_image()
 
@@ -464,6 +476,7 @@ if __name__=="__main__":
     space1              = Drawing(imgproc_box, align='top')
     space1.rectangle(10,10,60,60, color=background)
     snap_button         = PushButton(imgproc_box, command=snap, text="CAPTURE", align='top')
+    calib_button        = PushButton(imgproc_box, command=calibrate, text="CALIBRATE", align='top')
     crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top')
     segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top')
     detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top')

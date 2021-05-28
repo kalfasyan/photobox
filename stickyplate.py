@@ -9,6 +9,8 @@ import time
 from tqdm import tqdm
 from matplotlib import cm
 import logging
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 logger = logging.getLogger(__name__)
 class StickyPlate(object):
@@ -137,38 +139,44 @@ class StickyPlate(object):
             self.undistorted_img = dst
             self.pil_undistorted_img = Image.fromarray(dst)
 
-    def colorcorrect(self, plot=False):
+    def colorcorrect(self, inplace=True, plot=False):
+        logger.info("Color correction..")
         import colour
         import matplotlib.pyplot as plt
         from colour_checker_detection import (colour_checkers_coordinates_segmentation,
                                             detect_colour_checkers_segmentation)
         from colour_checker_detection.detection.segmentation import adjust_image
 
-        colour_checker_image_path = [f"{str(self.chessboard_dir)}/color_calib_plate.png"]
+        colour_checker_image_path = [f"{str(self.chessboard_dir)}/pb_colorcalib1.png"] 
         colour_checker_imgs = [colour.cctf_decoding(colour.io.read_image(path)) for path in colour_checker_image_path]
 
         # Detection
         SWATCHES = []
         for image in colour_checker_imgs:
-            for swatches, colour_checker, masks in detect_colour_checkers_segmentation(
-                image, additional_data=True):
+            for swatches, _, _ in detect_colour_checkers_segmentation( image, additional_data=True):
                 SWATCHES.append(swatches)
 
         # Colour Fitting
-        D65 = colour.ILLUMINANTS['CIE 1931 2 Degree Standard Observer']['D65']
-        reference_colour_checker = colour.COLOURCHECKERS['ColorChecker 2005']
+        D65 = colour.CCS_ILLUMINANTS['CIE 1931 2 Degree Standard Observer']['D65']
+        reference_colour_checker = colour.CCS_COLOURCHECKERS['ColorChecker 2005']
         reference_swatches = colour.XYZ_to_RGB(
                 colour.xyY_to_XYZ(list(reference_colour_checker.data.values())),
                 reference_colour_checker.illuminant, D65,
-                colour.RGB_COLOURSPACES['sRGB'].XYZ_to_RGB_matrix)
+                colour.RGB_COLOURSPACES['sRGB'].matrix_XYZ_to_RGB)
 
         # Custom image colour correction
-        img = colour.cctf_decoding(colour.io.read_image(self.path))
-        self.calibrated = colour.cctf_encoding(colour.colour_correction(img, SWATCHES[0], reference_swatches))
+        tmpimg = self.image/255. # colour.io.read_image(self.path)
+        img = colour.cctf_decoding(tmpimg)
+        calibrated = colour.cctf_encoding(colour.colour_correction(img, SWATCHES[0], reference_swatches))
         if plot:
-            colour.plotting.plot_image(self.calibrated)
+            colour.plotting.plot_image(calibrated)
 
-        self.pil_calibrated = Image.fromarray((self.calibrated * 255).astype(np.uint8))
+        if inplace:
+            self.image = (calibrated * 255).astype(np.uint8)
+            self.pil_image = Image.fromarray(self.image)
+        else:
+            self.calibrated = (calibrated * 255).astype(np.uint8)
+            self.pil_calibrated = Image.fromarray(self.calibrated)    
 
     def crop_image(self, height_pxls=100, width_pxls=120):
         logger.info("Cropping..")
