@@ -5,30 +5,18 @@ PhD Researcher at MeBioS, KU Leuven
 contact: ioannis.kalfas[at]kuleuven.be or kalfasyan[at]gmail.com
 """
 import glob
-import io
 import os
 import pathlib
-import threading
-import time
 import warnings
-from collections import deque
 from datetime import datetime
 from pathlib import Path
 from natsort import natsorted
 import subprocess
 from logging.handlers import RotatingFileHandler
 
-import cv2
-import imutils
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import picamera
-import RPi.GPIO as GPIO
-import scipy.integrate as it
 from guizero import *
-from picamera import PiCamera
-from picamera.array import PiRGBArray
 from PIL import Image
 from scipy.io.wavfile import write
 from scipy.signal import savgol_filter
@@ -43,7 +31,7 @@ from utils import get_cpu_temperature
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-global cpu_temperature
+global cpu_temperature, insectoptions
 cpu_temperature = 'NA'
 
 global default_log_path, default_ses_path, default_cal_path, caldir, default_prj_path
@@ -199,32 +187,6 @@ def snap_detect():
 #-----------------------------------------------
 ############ START GUI #########################
 
-def update_calib_status(nr_calib_plates=False):
-    global currdir_full
-
-    chessboard_imgs_in_currdir = glob.glob(f'{caldir}/calibration_chessboard*.jpg')
-    color_img_in_currdir = glob.glob(f'{caldir}/calibration_color*.jpg')
-    calib_chess_st.value = f"Calib chess: {len(chessboard_imgs_in_currdir)}"
-    calib_color_st.value = f"Calib color: {len(color_img_in_currdir)}"
-    logger.info(f"Chessboard images: {len(chessboard_imgs_in_currdir)}")
-    logger.info(f"Colorplate image: {len(color_img_in_currdir)}")
-    selected_sesspath.value = currdir_full
-
-    if nr_calib_plates:
-        return len(chessboard_imgs_in_currdir), len(color_img_in_currdir)
-
-def check_calib_done():
-    if plateloc_bt.value not in ["other", "calibration_chessboard", "calibration_color"]:
-        nr_chess_imgs, nr_color_imgs = update_calib_status(nr_calib_plates=True)
-        if nr_chess_imgs < 10 or nr_color_imgs < 1:
-            app.error(title='Error', text=f'Please perform calibration first. Minimum of 10 chessboard images and one Color plate image. \
-                                            Found {nr_chess_imgs} chessboard images and {nr_color_imgs} color plate(s).')
-            return False
-        else:
-            calib_chess_st.value = f"Chessboard images: OK"
-            calib_color_st.value = f"Colorplate images: OK"
-    return True
-
 def full_run():
     logger.info("Taking picture button pressed")
     check_calib = True # check_calib_done() 
@@ -236,6 +198,38 @@ def do_on_close():
     logger.info("Quit button pressed")
     if yesno("Close", "Are you sure you want to quit?"):
         app.destroy()
+
+def select_location():
+    logger.info(f"Selected location: {plateloc_bt.value}")
+
+
+def select_date():
+    logger.info("Date button pressed")
+    givendate = app.question("Plate date", "Provide the plate\'s date (e.g. w34 or YYYYMMDD like 20201125).")
+    if (givendate.startswith('w') and len(givendate) == 3) or date_validation(givendate):
+        if givendate is not None:
+            platedate_str.value = givendate
+    else:
+        app.error(title='Error', text='Date needs to be either in week format: w20 or YYYYMMDD like 20191218.')
+
+def enter_notes():
+    logger.info("Notes button pressed")
+    givennotes = app.question("Plate notes", "Give some extra location-notes regarding the plate. e.g. 1-60, centroid etc.")
+    if len(givennotes) <= 10:
+        platenotes_str.value = givennotes
+    else:
+        app.error(title='Error', text='Length of text provided is too long. Up to 10 characters allowed.')
+
+def date_validation(date_text):
+    try:
+        datetime.strptime(date_text, '%Y%m%d')
+    except:
+        print("Incorrect data format, should be YYYYMMDD")
+        return False
+    return True
+
+#-----------------------------------------------
+############ MENU-BAR #########################
 
 def check_session_path(name, created_new=False):
     if created_new:
@@ -315,40 +309,14 @@ def open_projectdir():
     p = subprocess.Popen(["pcmanfm", "%s" % f"{default_prj_path}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     p.communicate()
 
-def select_location():
-    logger.info(f"Selected location: {plateloc_bt.value}")
+#-----------------------------------------------
+############ DETECTIONS-VALIDATION #########################
 
 def select_insect():
     global detections_list, val_idx, insect_idx, df_vals
     logger.info(f"Selected insect: {insect_button.value}")
     df_vals.at[insect_idx, 'user_input'] = insect_button.value
     print(df_vals[['insect_id','prediction','user_input']])
-
-def validate(date_text):
-    try:
-        datetime.strptime(date_text, '%Y%m%d')
-    except:
-        print("Incorrect data format, should be YYYYMMDD")
-        return False
-    return True
-
-def select_date():
-    logger.info("Date button pressed")
-    givendate = app.question("Plate date", "Provide the plate\'s date (e.g. w34 or YYYYMMDD like 20201125).")
-    if (givendate.startswith('w') and len(givendate) == 3) or validate(givendate):
-        if givendate is not None:
-            platedate_str.value = givendate
-    else:
-        app.error(title='Error', text='Date needs to be either in week format: w20 or YYYYMMDD like 20191218.')
-
-def enter_notes():
-    logger.info("Notes button pressed")
-    givennotes = app.question("Plate notes", "Give some extra location-notes regarding the plate. e.g. 1-60, centroid etc.")
-    if len(givennotes) <= 10:
-        platenotes_str.value = givennotes
-    else:
-        app.error(title='Error', text='Length of text provided is too long. Up to 10 characters allowed.')
-
 
 def open_validation_window():
     assert 'df_vals' in globals(), "You need to first perform model inference to create predictions."
@@ -357,7 +325,11 @@ def open_validation_window():
     detections_list = natsorted([str(fname) for fname in pathlib.Path(dtcdir).glob('**/*.png')])
     val_img.image = detections_list[val_idx]
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    detectioninfo_str.value = f'Detection #:{insect_idx}, Predicted:{df_vals.loc[insect_idx].prediction}'
+    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    pred_str = str(pred_dict)
+    pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
+    detectioninfo_str.value = f'DETECTION #{insect_idx}'
+    predictioninfo_str.value = f'{pred_str}'
     insect_button.value = df_vals.loc[insect_idx].user_input
 
     val_window.show()
@@ -366,7 +338,7 @@ def close_validation_window():
     val_window.hide()
 
 def next_val():
-    global dtcdir, detections_list, val_idx, insect_idx, df_vals
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals, insectoptions
     print(val_idx)
     print(insect_button.value)
     if val_idx < len(detections_list)-1:
@@ -377,7 +349,11 @@ def next_val():
         val_img.image = detections_list[val_idx]
     print(detections_list[val_idx])
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    detectioninfo_str.value = f'Detection #:{insect_idx}, Predicted:{df_vals.loc[insect_idx].prediction}'
+    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    pred_str = str(pred_dict)
+    pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
+    detectioninfo_str.value = f'DETECTION #{insect_idx}'
+    predictioninfo_str.value = f'{pred_str}'
     insect_button.value = df_vals.loc[insect_idx].user_input
 
 def prev_val():
@@ -392,8 +368,41 @@ def prev_val():
         val_img.image = detections_list[val_idx]
     print(detections_list[val_idx])
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    detectioninfo_str.value = f'Detection #:{insect_idx}, Predicted:{df_vals.loc[insect_idx].prediction}'
+    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    pred_str = str(pred_dict)
+    pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
+    detectioninfo_str.value = f'DETECTION #{insect_idx}'
+    predictioninfo_str.value = f'{pred_str}'
     insect_button.value = df_vals.loc[insect_idx].user_input
+
+#-----------------------------------------------
+############ GENERAL #########################
+
+def update_calib_status(nr_calib_plates=False):
+    global currdir_full
+
+    chessboard_imgs_in_currdir = glob.glob(f'{caldir}/calibration_chessboard*.jpg')
+    color_img_in_currdir = glob.glob(f'{caldir}/calibration_color*.jpg')
+    calib_chess_st.value = f"Calib chess: {len(chessboard_imgs_in_currdir)}"
+    calib_color_st.value = f"Calib color: {len(color_img_in_currdir)}"
+    logger.info(f"Chessboard images: {len(chessboard_imgs_in_currdir)}")
+    logger.info(f"Colorplate image: {len(color_img_in_currdir)}")
+    selected_sesspath.value = currdir_full
+
+    if nr_calib_plates:
+        return len(chessboard_imgs_in_currdir), len(color_img_in_currdir)
+
+def check_calib_done():
+    if plateloc_bt.value not in ["other", "calibration_chessboard", "calibration_color"]:
+        nr_chess_imgs, nr_color_imgs = update_calib_status(nr_calib_plates=True)
+        if nr_chess_imgs < 10 or nr_color_imgs < 1:
+            app.error(title='Error', text=f'Please perform calibration first. Minimum of 10 chessboard images and one Color plate image. \
+                                            Found {nr_chess_imgs} chessboard images and {nr_color_imgs} color plate(s).')
+            return False
+        else:
+            calib_chess_st.value = f"Chessboard images: OK"
+            calib_color_st.value = f"Colorplate images: OK"
+    return True
 
 def load_model_in_memory():
     logger.info("Loading Insect-Model in memory..")
@@ -494,7 +503,7 @@ if __name__=="__main__":
 
 
     # VALIDATION WINDOW
-    val_window          = Window(app, visible=False, bg='white', title="VALIDATE DETECTIONS")
+    val_window          = Window(app, visible=False, bg='white', width=650, height=580, title="VALIDATE DETECTIONS")
 
     closeval_button     = PushButton(val_window, text="END", command=close_validation_window, align='top')
     val_img             = Picture(val_window, image=Image.new('RGB', (blankimgwidth//2, blankimgheight//2), (0,0,0)), align='top')
@@ -502,10 +511,12 @@ if __name__=="__main__":
                                     command=select_insect,
                                     selected="INSECT", 
                                     align='top')
-    detectioninfo_str   = Text(val_window, align='bottom')
-    detectioninfo_str.value = 'Detection #:?'
     next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top')
     prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top')
+    detectioninfo_str   = Text(val_window, align='top')
+    detectioninfo_str.value = 'DETECTION #?'
+    predictioninfo_str  = Text(val_window, align='top')
+    predictioninfo_str.value = ''
 
     app.when_closed = do_on_close
     app.display()
