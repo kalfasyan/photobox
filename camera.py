@@ -1,11 +1,9 @@
-import cv2
 from PIL import Image
-import picamera
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 from configparser import ConfigParser
-from common import config_path, make_dirs, check_dir_location, platelocations
+from common import config_path
 import time
 import logging
 

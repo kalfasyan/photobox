@@ -2,15 +2,14 @@ import picamera
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import cv2, time, os, glob
-import imutils
 import numpy as np
 import pandas as pd
 from datetime import datetime
 from configparser import ConfigParser
 import threading
-import pathlib
 import logging
-from common import config_path, make_dirs, check_dir_location, platelocations
+from common import config_path, platelocations
+from utils import make_dirs, check_dir_location
 
 logger = logging.getLogger(__name__)
 

@@ -7,6 +7,8 @@ contact: ioannis.kalfas[at]kuleuven.be or kalfasyan[at]gmail.com
 import glob
 import os
 import pathlib
+import shutil
+import re
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -27,11 +29,11 @@ from snap_detect import *
 from lights import *
 from stickyplate import StickyPlate, resize_pil_image
 from detections import *
-from utils import get_cpu_temperature
+from utils import get_cpu_temperature, make_session_dirs
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-global cpu_temperature, insectoptions
+global cpu_temperature, insectoptions, confidence_threshold
 cpu_temperature = 'NA'
 
 global default_log_path, default_ses_path, default_cal_path, caldir, default_prj_path
@@ -41,7 +43,7 @@ if not os.path.isdir(default_ses_path):
 if not os.path.isdir(currdir_full):
     os.mkdir(currdir_full)
 caldir = f"{default_cal_path}"
-imgdir, antdir, dtcdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections'])
+imgdir, antdir, dtcdir, expdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections','exports'])
 
 warnings.simplefilter("once", DeprecationWarning)
 
@@ -83,7 +85,7 @@ def calibrate():
     except:
         logger.info("Take a picture first.")
     sp.undistort(inplace=True)
-    sp.colorcorrect(inplace=True)
+    # sp.colorcorrect(inplace=True)
 
     pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
 
@@ -141,7 +143,8 @@ def predict():
 
     global df_vals
     df_vals = pd.merge(md.df, sp.yolo_specs, on='insect_id')
-    df_vals['user_input'] = 'INSECT'
+    df_vals['user_input'] = 'UNKNOWN'
+    df_vals['verified'] = 'UNVERIFIED'
 
 def snap_detect():
     if len(platedate_str.value):
@@ -161,7 +164,7 @@ def snap_detect():
         global sp
         sp = StickyPlate(full_platepath, caldir)
         sp.undistort(inplace=True)
-        sp.colorcorrect(inplace=True)
+        # sp.colorcorrect(inplace=True)
         sp.crop_image()
         sp.threshold_image()
 
@@ -269,7 +272,7 @@ def get_folder():
         currdir_full = selected_sesspath.value
         selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
         global imgdir, antdir, dtcdir
-        imgdir, antdir, dtcdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections'])
+        imgdir, antdir, dtcdir, expdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections','exports'])
 
 def create_sess():
     logger.info("Create session button pressed")
@@ -282,7 +285,7 @@ def create_sess():
         selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
         platedate_str.value = ''
         global imgdir, antdir, dtcdir
-        imgdir, antdir, dtcdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections'])
+        imgdir, antdir, dtcdir, expdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections','exports'])
 
 def open_currdir():
     global currdir_full
@@ -318,27 +321,92 @@ def select_insect():
     df_vals.at[insect_idx, 'user_input'] = insect_button.value
     print(df_vals[['insect_id','prediction','user_input']])
 
+def select_verified():
+    global insect_idx, df_vals
+    logger.info(f"Selected: {verify_button.value}")
+    df_vals.at[insect_idx, 'verified'] = verify_button.value
+    print(df_vals[['insect_id','prediction','user_input','verified']])
+
 def open_validation_window():
     assert 'df_vals' in globals(), "You need to first perform model inference to create predictions."
-    global dtcdir, detections_list, val_idx, insect_idx, df_vals
+
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals, critical_insects, confidence_threshold
+    # Delete insect detections that are not important
+    list_delete_detections = df_vals[~df_vals.prediction.isin(critical_insects)].filepath.tolist()
+    for filepath in list_delete_detections:
+        logger.info(f"Removing {filepath}")
+        os.remove(filepath)
+    # Removing uninteresting insect detections from dataframe
+    df_vals.drop(df_vals[~df_vals.prediction.isin(critical_insects)].index, inplace=True)
+    # Resetting index
+    df_vals.reset_index(drop=True, inplace=True)
+    # Resetting insect_id
+    df_vals.insect_id = df_vals.index.values
+    # Resetting filenames
+    for i,f in enumerate(natsorted(os.listdir(dtcdir))):
+
+        oldfilename = '_'.join(f.split('_')[:-1])
+        newfilename = oldfilename + f'_{i}.png'
+
+        shutil.move(f"{dtcdir}/{f}", f"{dtcdir}/{newfilename}")
+
+    df_vals.filepath = pd.Series(natsorted(os.listdir(dtcdir))).apply(lambda x: 'detections/'+x)
+    print(df_vals)
+
     val_idx = 0
+    # List of all detections' filenames
     detections_list = natsorted([str(fname) for fname in pathlib.Path(dtcdir).glob('**/*.png')])
+    # Display image of the validations window
     val_img.image = detections_list[val_idx]
+    # Insect index taken from the filename
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    # All insect probability scores taken from df_vals
+    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: int(round(x,0))).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
     pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
+    # Displaying the detection number (bounding box number)
     detectioninfo_str.value = f'DETECTION #{insect_idx}'
+    # Displaying all probabilities per insect class
     predictioninfo_str.value = f'{pred_str}'
+    # Setting and displaying the drop-down insect class button to the chosen value
     insect_button.value = df_vals.loc[insect_idx].user_input
+    verify_button.value = df_vals.loc[insect_idx].verified
+
+    if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
+        logger.info("TOP PROB IS HIGHER")
+        insect_button.value = df_vals.loc[insect_idx].prediction
 
     val_window.show()
 
 def close_validation_window():
     val_window.hide()
+    if yesno("Close", "Are you sure you want to exit without saving?"):
+        val_window.hide()
+    else:
+        val_window.show()
+
+def save_and_reset():
+    # TODO: Fix this
+    global df_vals, currdir_full, critical_insects, expdir
+
+    for p in df_vals.user_input.tolist():
+        path = f"{expdir}/{p}/"
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+    new_paths = []
+    for i, row in df_vals.iterrows():
+        new_paths.append(f"{expdir}/{row.user_input}/{row.filepath.split('/')[-1]}")
+    
+    for i in range(len(new_paths)):
+        print(f"from {df_vals.filepath.tolist()[i]} to {new_paths[i]}")
+        shutil.move(df_vals.filepath.tolist()[i], new_paths[i], copy_function=shutil.copy2)
+
+    memory_reset()
+    val_window.hide()
 
 def next_val():
-    global dtcdir, detections_list, val_idx, insect_idx, df_vals, insectoptions
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals, insectoptions, confidence_threshold
     print(val_idx)
     print(insect_button.value)
     if val_idx < len(detections_list)-1:
@@ -355,9 +423,13 @@ def next_val():
     detectioninfo_str.value = f'DETECTION #{insect_idx}'
     predictioninfo_str.value = f'{pred_str}'
     insect_button.value = df_vals.loc[insect_idx].user_input
+    verify_button.value = df_vals.loc[insect_idx].verified
+    if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
+        logger.info("TOP PROB IS HIGHER")
+        insect_button.value = df_vals.loc[insect_idx].prediction
 
 def prev_val():
-    global dtcdir, detections_list, val_idx, insect_idx, df_vals
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals, confidence_threshold
     print(val_idx)
     print(insect_button.value)
     if val_idx > 0:
@@ -374,9 +446,18 @@ def prev_val():
     detectioninfo_str.value = f'DETECTION #{insect_idx}'
     predictioninfo_str.value = f'{pred_str}'
     insect_button.value = df_vals.loc[insect_idx].user_input
+    verify_button.value = df_vals.loc[insect_idx].verified    
+    if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
+        logger.info("TOP PROB IS HIGHER")
+        insect_button.value = df_vals.loc[insect_idx].prediction
 
 #-----------------------------------------------
 ############ GENERAL #########################
+
+def memory_reset():
+    global sp, df_vals, detections_list, md
+    del sp, df_vals, detections_list, md
+    pic_image = Picture(app, image=Image.new('RGB', (blankimgwidth, blankimgheight), (0,0,0)), grid=[1,2])
 
 def update_calib_status(nr_calib_plates=False):
     global currdir_full
@@ -498,18 +579,23 @@ if __name__=="__main__":
     fullrun_box         = Box(app, width="fill", align="right", grid=[1,3])
     
     openval_button      = PushButton(fullrun_box, command=open_validation_window, text="3. VALIDATE PREDICTIONS", align='right')
-    predict_bt          = PushButton(fullrun_box, command=predict, text="2. INSECT MODEL INFERENCE", align='right')
-    fullrun_bt          = PushButton(fullrun_box, command=full_run, text="1. PROCESS STICKY PLATE", align='right')
+    predict_bt          = PushButton(fullrun_box, command=predict, text="2. MODEL INFERENCE", align='right')
+    fullrun_bt          = PushButton(fullrun_box, command=full_run, text="1. PROCESS IMAGE", align='right')
 
 
     # VALIDATION WINDOW
-    val_window          = Window(app, visible=False, bg='white', width=650, height=580, title="VALIDATE DETECTIONS")
+    val_window          = Window(app, visible=False, bg='white', width=650, height=610, title="VALIDATE DETECTIONS")
 
-    closeval_button     = PushButton(val_window, text="END", command=close_validation_window, align='top')
+    savexit_button      = PushButton(val_window, text="SAVE & RESET", command=save_and_reset, align='top')
+    closeval_button     = PushButton(val_window, text="EXIT", command=close_validation_window, align='top')
     val_img             = Picture(val_window, image=Image.new('RGB', (blankimgwidth//2, blankimgheight//2), (0,0,0)), align='top')
     insect_button       = Combo(val_window, options=insectoptions, 
                                     command=select_insect,
-                                    selected="INSECT", 
+                                    selected="UNKNOWN", 
+                                    align='top')
+    verify_button       = Combo(val_window, options=['UNVERIFIED','VERIFIED'], 
+                                    command=select_verified,    
+                                    selected="UNVERIFIED", 
                                     align='top')
     next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top')
     prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top')

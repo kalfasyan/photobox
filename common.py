@@ -1,28 +1,5 @@
-import pathlib, os
+import os
 from configparser import ConfigParser
-
-def get_latest_filename(path=None):
-    allpaths = sorted(pathlib.Path(path).iterdir(), key=os.path.getmtime)
-    return f"{path}/{allpaths[-1].name}"
-
-def make_dirs(paths=[]):
-    for p in paths:
-        if not os.path.exists(p): 
-            os.mkdir(p)
-
-def make_session_dirs(curdir='', paths=['images','annotations','detections']):
-    dirs = []
-    for p in paths:
-        dirs.append(f"{curdir}/{p}/")
-
-    make_dirs(dirs)
-    return [i for i in dirs]
-
-def check_dir_location(path=None):
-    if isinstance(path, str) and path.startswith(default_ses_path) and path != default_ses_path:
-        return True
-    else:
-        return False
 
 config = ConfigParser()
 config_path = './config.ini'
@@ -44,6 +21,7 @@ for p in [default_cal_path, default_log_path, default_ses_path]:
     if not os.path.exists(p):
         os.makedirs(p)
 
+confidence_threshold = int(config.get('app','confidence_threshold'))
 dht22_pin = int(config.get('dht22', 'pin'))
 if str(config.get('dht22', 'installed')) == "True":
     dht22_sensor = True
@@ -55,3 +33,6 @@ with open("LOCATIONS.txt", "r") as f:
 
 with open("INSECTS.txt", "r") as f:
     insectoptions = f.read().split('\n')
+
+with open("CRITICAL_INSECTS.txt", "r") as f:
+    critical_insects = f.read().split('\n')
