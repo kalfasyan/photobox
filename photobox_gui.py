@@ -270,8 +270,7 @@ def get_folder():
     if selected_sesspath.value is not None:
         global currdir_full
         currdir_full = selected_sesspath.value
-        selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
-        global imgdir, antdir, dtcdir
+        global imgdir, antdir, dtcdir, expdir
         imgdir, antdir, dtcdir, expdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections','exports'])
 
 def create_sess():
@@ -282,9 +281,9 @@ def create_sess():
     if selected_sesspath.value is not None:
         global currdir_full
         currdir_full = selected_sesspath.value
-        selected_sesspath.value = f"{selected_sesspath.value.split('/')[-1]}"
+        logger.info(f"Session path is set to {currdir_full}.")
         platedate_str.value = ''
-        global imgdir, antdir, dtcdir
+        global imgdir, antdir, dtcdir, expdir
         imgdir, antdir, dtcdir, expdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections','exports'])
 
 def open_currdir():
@@ -311,6 +310,12 @@ def open_projectdir():
     global default_prj_path
     p = subprocess.Popen(["pcmanfm", "%s" % f"{default_prj_path}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     p.communicate()
+
+def open_expdir():
+    global expdir
+    p = subprocess.Popen(["pcmanfm", "%s" % f"{expdir}"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+
 
 #-----------------------------------------------
 ############ DETECTIONS-VALIDATION #########################
@@ -344,7 +349,6 @@ def open_validation_window():
     df_vals.insect_id = df_vals.index.values
     # Resetting filenames
     for i,f in enumerate(natsorted(os.listdir(dtcdir))):
-
         oldfilename = '_'.join(f.split('_')[:-1])
         newfilename = oldfilename + f'_{i}.png'
 
@@ -370,42 +374,16 @@ def open_validation_window():
     predictioninfo_str.value = f'{pred_str}'
     # Setting and displaying the drop-down insect class button to the chosen value
     insect_button.value = df_vals.loc[insect_idx].user_input
+    # Drop-down verification button (VERIFIED/UNVERIFIED)
     verify_button.value = df_vals.loc[insect_idx].verified
-
+    # Setting a class name for insects with high prediction confidence value
     if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
-        logger.info("TOP PROB IS HIGHER")
         insect_button.value = df_vals.loc[insect_idx].prediction
 
     val_window.show()
 
-def close_validation_window():
-    val_window.hide()
-    if yesno("Close", "Are you sure you want to exit without saving?"):
-        val_window.hide()
-    else:
-        val_window.show()
-
-def save_and_reset():
-    # TODO: Fix this
-    global df_vals, currdir_full, critical_insects, expdir
-
-    for p in df_vals.user_input.tolist():
-        path = f"{expdir}/{p}/"
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-    new_paths = []
-    for i, row in df_vals.iterrows():
-        new_paths.append(f"{expdir}/{row.user_input}/{row.filepath.split('/')[-1]}")
-    
-    for i in range(len(new_paths)):
-        print(f"from {df_vals.filepath.tolist()[i]} to {new_paths[i]}")
-        shutil.move(df_vals.filepath.tolist()[i], new_paths[i], copy_function=shutil.copy2)
-
-    memory_reset()
-    val_window.hide()
-
 def next_val():
+    """ Similar to open_validation_window """
     global dtcdir, detections_list, val_idx, insect_idx, df_vals, insectoptions, confidence_threshold
     print(val_idx)
     print(insect_button.value)
@@ -425,10 +403,10 @@ def next_val():
     insect_button.value = df_vals.loc[insect_idx].user_input
     verify_button.value = df_vals.loc[insect_idx].verified
     if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
-        logger.info("TOP PROB IS HIGHER")
         insect_button.value = df_vals.loc[insect_idx].prediction
 
 def prev_val():
+    """ Similar to open_validation_window """
     global dtcdir, detections_list, val_idx, insect_idx, df_vals, confidence_threshold
     print(val_idx)
     print(insect_button.value)
@@ -448,8 +426,37 @@ def prev_val():
     insect_button.value = df_vals.loc[insect_idx].user_input
     verify_button.value = df_vals.loc[insect_idx].verified    
     if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
-        logger.info("TOP PROB IS HIGHER")
         insect_button.value = df_vals.loc[insect_idx].prediction
+
+def close_validation_window():
+    val_window.hide()
+    if yesno("Close", "Are you sure you want to exit without saving?"):
+        val_window.hide()
+    else:
+        val_window.show()
+
+def save_and_reset():
+    global df_vals, currdir_full, critical_insects, dtcdir, expdir
+
+    # Create directories per class name in exports folder
+    export_folders = np.unique(df_vals.prediction.tolist() + df_vals.user_input.tolist()+['UNKNOWN']).tolist()
+    for p in export_folders:
+        path = f"{expdir}/{p}/"
+        if not os.path.exists(path):
+            os.makedirs(path)
+    # Create the filenames of the exports
+    new_paths = []
+    for i, row in df_vals.iterrows():
+       new_paths.append(f"{expdir}/{row.user_input}/{row.filepath.split('/')[-1][:-4]}_{row.prediction}_{row.user_input}_{row.verified}.png")
+    # Moving detections to the exports folder
+    for i in range(len(new_paths)):
+        oldpath = f"{dtcdir}/{df_vals.filepath.tolist()[i].replace('detections/','')}"
+        newpath = new_paths[i]
+
+        shutil.move(oldpath, newpath, copy_function=shutil.copy2)
+
+    memory_reset()
+    val_window.hide()
 
 #-----------------------------------------------
 ############ GENERAL #########################
@@ -509,7 +516,7 @@ if __name__=="__main__":
     setup_lights()
     load_model_in_memory()
 
-    app = App(title="Photobox v0.8", layout="grid", width=appwidth, height=appheight, bg = background)
+    app = App(title="Photobox v1.0", layout="grid", width=appwidth, height=appheight, bg = background)
 
     # MENU
     menubar             = MenuBar(app, 
@@ -523,6 +530,7 @@ if __name__=="__main__":
                                         ["Open session directory..", open_currdir], 
                                         ["Open image directory..", open_imgdir], 
                                         ["Open detections directory..", open_dtcdir],
+                                        ["Open exports directory..", open_expdir],
                                         ["Open logs directory..", open_logdir] ,  
                                         ["Open project directory..(to change locations, insects)", open_projectdir], 
                                     ], ]                        
@@ -584,7 +592,7 @@ if __name__=="__main__":
 
 
     # VALIDATION WINDOW
-    val_window          = Window(app, visible=False, bg='white', width=650, height=610, title="VALIDATE DETECTIONS")
+    val_window          = Window(app, visible=False, bg='white', width=650, height=650, title="VALIDATE DETECTIONS")
 
     savexit_button      = PushButton(val_window, text="SAVE & RESET", command=save_and_reset, align='top')
     closeval_button     = PushButton(val_window, text="EXIT", command=close_validation_window, align='top')

@@ -13,12 +13,12 @@ from tensorflow.keras.layers import (Activation, Dense, Dropout,
 from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tqdm import tqdm
+from common import confidence_threshold
 
 from utils import (copy_files, non_max_suppression_fast, overlay_yolo,
                    save_insect_crops)
 
 logger = logging.getLogger(__name__)
-
 
 class ModelDetections(object):
 
@@ -44,7 +44,7 @@ class ModelDetections(object):
                                                 random_state=42)
         self.generator = generator
 
-    def get_predictions(self, model, stickyplatehandler, certainty_threshold=90):
+    def get_predictions(self, model, stickyplatehandler, confidence_threshold=confidence_threshold):
         df = self.df
         assert hasattr(self, 'generator'), 'Create data generator first.'
 
@@ -54,7 +54,7 @@ class ModelDetections(object):
         df['prediction'] = self.le.inverse_transform(y_pred)
         df = pd.concat([df,pd.DataFrame(pred*100, columns=[i for i in self.target_classes])], axis=1)
         df = df.merge(stickyplatehandler.yolo_specs, on='insect_id')
-        df['uncertain'] = df[self.target_classes].max(axis=1) < certainty_threshold
+        df['uncertain'] = df[self.target_classes].max(axis=1) < confidence_threshold
         df['class'] = 'na'
         df['top_prob'] = df[self.target_classes].max(axis=1)
 
