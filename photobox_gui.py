@@ -85,7 +85,7 @@ def calibrate():
     except:
         logger.info("Take a picture first.")
     sp.undistort(inplace=True)
-    # sp.colorcorrect(inplace=True)
+    sp.colorcorrect(inplace=True)
 
     pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
 
@@ -164,7 +164,7 @@ def snap_detect():
         global sp
         sp = StickyPlate(full_platepath, caldir)
         sp.undistort(inplace=True)
-        # sp.colorcorrect(inplace=True)
+        sp.colorcorrect(inplace=True)
         sp.crop_image()
         sp.threshold_image()
 
@@ -227,7 +227,7 @@ def date_validation(date_text):
     try:
         datetime.strptime(date_text, '%Y%m%d')
     except:
-        print("Incorrect data format, should be YYYYMMDD")
+        logger.info("Incorrect data format, should be YYYYMMDD")
         return False
     return True
 
@@ -262,7 +262,7 @@ def check_session_path(name, created_new=False):
         logger.info(f"Created path: {user_created_sesspath}")
         return user_created_sesspath
 
-def get_folder():
+def change_sess():
     logger.info("Select session folder button pressed")
     name = app.select_folder(folder=default_ses_path)
     selected_sesspath.value = check_session_path(name, created_new=False)
@@ -355,7 +355,7 @@ def open_validation_window():
         shutil.move(f"{dtcdir}/{f}", f"{dtcdir}/{newfilename}")
 
     df_vals.filepath = pd.Series(natsorted(os.listdir(dtcdir))).apply(lambda x: 'detections/'+x)
-    print(df_vals)
+    print(df_vals[['insect_id','prediction','user_input']])
 
     val_idx = 0
     # List of all detections' filenames
@@ -385,15 +385,14 @@ def open_validation_window():
 def next_val():
     """ Similar to open_validation_window """
     global dtcdir, detections_list, val_idx, insect_idx, df_vals, insectoptions, confidence_threshold
-    print(val_idx)
-    print(insect_button.value)
+
     if val_idx < len(detections_list)-1:
         val_idx+=1
         val_img.image = detections_list[val_idx]
     else:
         val_idx = 0
         val_img.image = detections_list[val_idx]
-    print(detections_list[val_idx])
+
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
     pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
@@ -408,15 +407,14 @@ def next_val():
 def prev_val():
     """ Similar to open_validation_window """
     global dtcdir, detections_list, val_idx, insect_idx, df_vals, confidence_threshold
-    print(val_idx)
-    print(insect_button.value)
+
     if val_idx > 0:
         val_idx-=1
         val_img.image = detections_list[val_idx]
     else:
         val_idx = len(detections_list)-1
         val_img.image = detections_list[val_idx]
-    print(detections_list[val_idx])
+
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
     pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
@@ -523,7 +521,7 @@ if __name__=="__main__":
                                 toplevel=["File","Open"],
                                 options=[
                                     [ 
-                                        ["Change current session..", get_folder], 
+                                        ["Change current session..", change_sess], 
                                         ["New session..", create_sess] 
                                     ],
                                     [ 
