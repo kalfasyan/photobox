@@ -18,8 +18,7 @@ class StickyPlate(object):
     def __init__(self, path, chessboard_dir):
         self.path = str(path)
         self.pname = self.path.split('/')[-1][:-4]
-        self.pil_image = Image.open(self.path)
-        self.image = np.array(self.pil_image)
+        self.image = np.array(Image.open(self.path))
         self.H, self.W = self.image.shape[:2]
         self.chessboard_dir = chessboard_dir
         self.cropped = False
@@ -133,11 +132,9 @@ class StickyPlate(object):
         self.undistorted = True
 
         if inplace:
-            self.pil_image = Image.fromarray(dst)
             self.image = dst
         else:
             self.undistorted_img = dst
-            self.pil_undistorted_img = Image.fromarray(dst)
 
     def colorcorrect(self, inplace=True, plot=False):
         logger.info("Color correction..")
@@ -147,7 +144,7 @@ class StickyPlate(object):
                                             detect_colour_checkers_segmentation)
         from colour_checker_detection.detection.segmentation import adjust_image
 
-        colour_checker_image_path = [f"{str(self.chessboard_dir)}/pb_colorcalib1.png"] 
+        colour_checker_image_path = [f"{str(self.chessboard_dir)}/pb_colorcalib3.png"] 
         colour_checker_imgs = [colour.cctf_decoding(colour.io.read_image(path)) for path in colour_checker_image_path]
 
         # Detection
@@ -165,18 +162,14 @@ class StickyPlate(object):
                 colour.RGB_COLOURSPACES['sRGB'].matrix_XYZ_to_RGB)
 
         # Custom image colour correction
-        tmpimg = self.image/255. # colour.io.read_image(self.path)
-        img = colour.cctf_decoding(tmpimg)
-        calibrated = colour.cctf_encoding(colour.colour_correction(img, SWATCHES[0], reference_swatches))
+        calibrated = colour.cctf_encoding(colour.colour_correction(colour.cctf_decoding(self.image/255.), SWATCHES[0], reference_swatches))
         if plot:
             colour.plotting.plot_image(calibrated)
 
         if inplace:
             self.image = (calibrated * 255).astype(np.uint8)
-            self.pil_image = Image.fromarray(self.image)
         else:
             self.calibrated = (calibrated * 255).astype(np.uint8)
-            self.pil_calibrated = Image.fromarray(self.calibrated)    
 
     def crop_image(self, height_pxls=100, width_pxls=120):
         logger.info("Cropping..")
@@ -185,10 +178,7 @@ class StickyPlate(object):
         height,width = self.image.shape[:2]
         self.image = self.image[height_pxls:height-height_pxls,
                                 width_pxls:width-width_pxls]
-        self.pil_image = Image.fromarray(self.image)
         self.H, self.W = self.image.shape[:2]
-
-        self.cropped = True
 
         print(f"New image shape: {self.image.shape}")
 
@@ -228,7 +218,6 @@ class StickyPlate(object):
         self.image_bboxes = self.image.copy()
         for i, (startX, startY, endX, endY) in enumerate(pick):
             cv2.rectangle(self.image_bboxes, (startX, startY), (endX, endY), (0, 255, 0), 2)
-        self.pil_image_bboxes = Image.fromarray(self.image_bboxes)
 
         yolo_x,yolo_y,yolo_w,yolo_h = [],[],[],[]
         for i in range(len(self.bbox_coordinates)):

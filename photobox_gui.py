@@ -76,7 +76,7 @@ def snap():
     global sp
     sp = StickyPlate(full_platepath, caldir)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=appwidth-450), grid=[1,2])
     pic_path.value = full_platepath
 
 def calibrate():
@@ -87,7 +87,7 @@ def calibrate():
     sp.undistort(inplace=True)
     sp.colorcorrect(inplace=True)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=appwidth-450), grid=[1,2])
 
 def segment():
     try:
@@ -97,7 +97,7 @@ def segment():
     assert sp.undistorted
     sp.threshold_image(threshold=127)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_thresholded, basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.thresholded), basewidth=appwidth-450), grid=[1,2])
 
 def crop():
     try:
@@ -108,7 +108,7 @@ def crop():
     assert not sp.cropped, "Already cropped"
     sp.crop_image(height_pxls=100, width_pxls=120)
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image, basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=appwidth-450), grid=[1,2])
 
 def detect():
     try:
@@ -122,9 +122,10 @@ def detect():
     sp.detect_objects(min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150)
     sp.save_detections(savepath=dtcdir)        
 
-    pic_image = Picture(app, image=resize_pil_image(sp.pil_image_bboxes, basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image_bboxes), basewidth=appwidth-450), grid=[1,2])
 
 def predict():
+    load_model_in_memory()
     try:
         global sp
     except:
@@ -171,13 +172,13 @@ def snap_detect():
         if not plateloc_bt.value.startswith('calibration'):
             sp.detect_objects()
             sp.save_detections(savepath=dtcdir)
-            disp_img = sp.pil_image_bboxes
+            disp_img = Image.fromarray(sp.image_bboxes)
         else:
-            disp_img = sp.pil_image
+            disp_img = sp.image
 
         logger.info("Saved image")
 
-        pic_image = Picture(app, image=resize_pil_image(disp_img, basewidth=appwidth-450), grid=[1,2])
+        pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-450), grid=[1,2])
         pic_path.value = full_platepath
         del cam
     else:
@@ -512,7 +513,6 @@ def get_stats():
 if __name__=="__main__":
 
     setup_lights()
-    load_model_in_memory()
 
     app = App(title="Photobox v1.0", layout="grid", width=appwidth, height=appheight, bg = background)
 
