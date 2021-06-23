@@ -85,7 +85,7 @@ def calibrate():
     except:
         logger.info("Take a picture first.")
     sp.undistort(inplace=True)
-    sp.colorcorrect(inplace=True)
+    # sp.colorcorrect(inplace=True)
 
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=appwidth-450), grid=[1,2])
 
@@ -126,6 +126,7 @@ def detect():
 
 def predict():
     load_model_in_memory()
+
     try:
         global sp
     except:
@@ -139,13 +140,17 @@ def predict():
     md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-1])
     md.create_data_generator()
     md.get_predictions(model, sp)
-    disp_img = overlay_yolo(md.df, sp.image, insectoptions)
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-450), grid=[1,2])
 
     global df_vals
-    df_vals = pd.merge(md.df, sp.yolo_specs, on='insect_id')
+    df_vals = pd.merge(md.df, sp.yolo_specs, on=['insect_id','yolo_x','yolo_y','yolo_width','yolo_height','pname'])
     df_vals['user_input'] = 'UNKNOWN'
     df_vals['verified'] = 'UNVERIFIED'
+
+    get_interesting_filenames()
+
+    disp_img = overlay_yolo(df_vals, sp.image, insectoptions)
+    print(df_vals.columns)
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-450), grid=[1,2])
 
 def snap_detect():
     if len(platedate_str.value):
@@ -165,7 +170,7 @@ def snap_detect():
         global sp
         sp = StickyPlate(full_platepath, caldir)
         sp.undistort(inplace=True)
-        sp.colorcorrect(inplace=True)
+        # sp.colorcorrect(inplace=True)
         sp.crop_image()
         sp.threshold_image()
 
@@ -333,10 +338,9 @@ def select_verified():
     df_vals.at[insect_idx, 'verified'] = verify_button.value
     print(df_vals[['insect_id','prediction','user_input','verified']])
 
-def open_validation_window():
-    assert 'df_vals' in globals(), "You need to first perform model inference to create predictions."
+def get_interesting_filenames():
+    global dtcdir, df_vals
 
-    global dtcdir, detections_list, val_idx, insect_idx, df_vals, critical_insects, confidence_threshold
     # Delete insect detections that are not important
     list_delete_detections = df_vals[~df_vals.prediction.isin(critical_insects)].filepath.tolist()
     for filepath in list_delete_detections:
@@ -348,12 +352,22 @@ def open_validation_window():
     df_vals.reset_index(drop=True, inplace=True)
     # Resetting insect_id
     df_vals.insect_id = df_vals.index.values
-    # Resetting filenames
+    # Resetting filenames # TODO: this destroys the matching of detection # and insect_idx on prediction
     for i,f in enumerate(natsorted(os.listdir(dtcdir))):
+        print('_'.join(f.split('_')))
+        print("after removing last _ split")
+        print('_'.join(f.split('_')[:-1]))
         oldfilename = '_'.join(f.split('_')[:-1])
+        print("result")
+        print(oldfilename)
         newfilename = oldfilename + f'_{i}.png'
 
         shutil.move(f"{dtcdir}/{f}", f"{dtcdir}/{newfilename}")
+
+def open_validation_window():
+    assert 'df_vals' in globals(), "You need to first perform model inference to create predictions."
+
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals, critical_insects, confidence_threshold
 
     df_vals.filepath = pd.Series(natsorted(os.listdir(dtcdir))).apply(lambda x: 'detections/'+x)
     print(df_vals[['insect_id','prediction','user_input']])

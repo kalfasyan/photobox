@@ -126,6 +126,7 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
     assert confidence_threshold > 20, "Threshold too low. Set it above 20."
 
     H,W,_ = plate_img.shape
+    print(specifications.columns)
     
     for _, row in tqdm(specifications.iterrows(), "Overlaying bboxes with predictions.."):
         if row.prediction in class_selection:
