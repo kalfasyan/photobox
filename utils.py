@@ -126,8 +126,7 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
     assert confidence_threshold > 20, "Threshold too low. Set it above 20."
 
     H,W,_ = plate_img.shape
-    print(specifications.columns)
-    
+    print(specifications)
     for _, row in tqdm(specifications.iterrows(), "Overlaying bboxes with predictions.."):
         if row.prediction in class_selection:
 
@@ -141,7 +140,8 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
             if(top < 0): top = 0;
             if(bot > H-1): bot = H-1;
 
-            if row.prediction in [top_class, 'v'] or row[top_class] > 20.:
+            if row.prediction in [top_class] or row[top_class] > 20.:
+            # Draws a box if the prediction is 'top_class' or if the % for it is more than 20
                 if row.top_prob > row[top_class] > 20.:
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 0, 0), 2)
                     cv2.putText(plate_img, f"{row.insect_id},{top_class}.{row[top_class]/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
@@ -151,6 +151,10 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
                 else:
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 255, 0), 2)
                     cv2.putText(plate_img, f"{row.insect_id},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0,255,0), 2)
+            else:
+                cv2.rectangle(plate_img, (left, top), (right, bot), (0, 0, 255), 2)
+                cv2.putText(plate_img, f"{row.insect_id},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0, 0, 255), 2)
+            
     return plate_img
 
 def get_cpu_temperature():

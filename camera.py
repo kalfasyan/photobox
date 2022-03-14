@@ -12,14 +12,18 @@ logger = logging.getLogger(__name__)
 config = ConfigParser()
 config.read(config_path)
 
-res_width = int(config.get('camera', 'width'))
-res_height = int(config.get('camera', 'height'))
+camera = config.get('base', 'camera') 
+assert camera in ['camera8MP', 'camera12MP'], f"Camera setting not recognized: {camera}"
+
+res_width = int(config.get(camera, 'width'))
+res_height = int(config.get(camera, 'height'))
 
 class CameraHandler(object):
 
     def __init__(self, resolution=(res_width, res_height), ):
         logger.info("Initializing camera object..")
         self.camera = PiCamera()
+        self.camera.awb_mode = 'auto'
         self.camera.resolution = resolution
         self.rawCapture = PiRGBArray(self.camera, size=self.camera.resolution)
         self.unsaved_capture = False

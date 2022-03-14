@@ -6,5 +6,6 @@ sw
 t
 v
 wmv
+wrl
 NOT_AN_INSECT
 UNKNOWN

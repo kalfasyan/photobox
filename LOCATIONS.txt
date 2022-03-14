@@ -1,8 +1,16 @@
 calibration_chessboard
 calibration_color
+arc
+kortemark
+pecq
+test
+framez
 kampen
 beauvech
 brainelal
+wortel
+mollem
+landen
 herent
 herentVAL1
 herentVAL2

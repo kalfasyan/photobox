@@ -68,8 +68,11 @@ logger = logging.getLogger(__name__)
 def snap():
     cam = CameraHandler()
     w, h = cam.camera.resolution
-    full_platepath = Path(f"{imgdir}/TEST.png")
-
+    plateloc = plateloc_bt.value
+    plateinfo = platenotes_str.value if len(platenotes_str.value) else "NA"
+    platedate = platedate_str.value
+    platename = f"{plateloc}_{plateinfo}_{platedate}_{w}x{h}.png"
+    full_platepath = Path(f"{imgdir}/{platename}")
     cam.capture()
     cam.save(full_platepath)
 
@@ -136,8 +139,8 @@ def predict():
     assert sp.segmented, "Segment image first"
     assert sp.detected, "Detect objects first"
 
-    global model, dtcdir, md
-    md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-1])
+    global model, dtcdir, md, expdir
+    md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-2])
     md.create_data_generator()
     md.get_predictions(model, sp)
 
@@ -145,13 +148,15 @@ def predict():
     df_vals = pd.merge(md.df, sp.yolo_specs, on=['insect_id','yolo_x','yolo_y','yolo_width','yolo_height','pname'])
     df_vals['user_input'] = 'UNKNOWN'
     df_vals['verified'] = 'UNVERIFIED'
-
-    get_interesting_filenames()
+    df_vals.to_csv("/home/pi/Desktop/df_vals.csv")
 
     disp_img = overlay_yolo(df_vals, sp.image, insectoptions)
     print(df_vals.columns)
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-450), grid=[1,2])
-
+    
+    get_interesting_filenames()
+    df_vals.to_csv("/home/pi/Desktop/df_vals_clean.csv")
+    
 def snap_detect():
     if len(platedate_str.value):
         logger.info(f"Plate date set to: {platedate_str.value}")
@@ -177,7 +182,7 @@ def snap_detect():
         if not plateloc_bt.value.startswith('calibration'):
             sp.detect_objects()
             sp.save_detections(savepath=dtcdir)
-            disp_img = Image.fromarray(sp.image_bboxes)
+            disp_img = sp.image_bboxes
         else:
             disp_img = sp.image
 
@@ -354,12 +359,7 @@ def get_interesting_filenames():
     df_vals.insect_id = df_vals.index.values
     # Resetting filenames # TODO: this destroys the matching of detection # and insect_idx on prediction
     for i,f in enumerate(natsorted(os.listdir(dtcdir))):
-        print('_'.join(f.split('_')))
-        print("after removing last _ split")
-        print('_'.join(f.split('_')[:-1]))
         oldfilename = '_'.join(f.split('_')[:-1])
-        print("result")
-        print(oldfilename)
         newfilename = oldfilename + f'_{i}.png'
 
         shutil.move(f"{dtcdir}/{f}", f"{dtcdir}/{newfilename}")
@@ -380,7 +380,7 @@ def open_validation_window():
     # Insect index taken from the filename
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
     # All insect probability scores taken from df_vals
-    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: int(round(x,0))).sort_values(ascending=False).to_dict()
+    pred_dict = df_vals[insectoptions[:-2]].loc[insect_idx].apply(lambda x: int(round(x,0))).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
     pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
     # Displaying the detection number (bounding box number)
@@ -409,7 +409,7 @@ def next_val():
         val_img.image = detections_list[val_idx]
 
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    pred_dict = df_vals[insectoptions[:-2]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
     pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
     detectioninfo_str.value = f'DETECTION #{insect_idx}'
@@ -431,7 +431,7 @@ def prev_val():
         val_img.image = detections_list[val_idx]
 
     insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    pred_dict = df_vals[insectoptions[:-1]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    pred_dict = df_vals[insectoptions[:-2]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
     pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
     detectioninfo_str.value = f'DETECTION #{insect_idx}'
@@ -508,8 +508,8 @@ def check_calib_done():
 def load_model_in_memory():
     logger.info("Loading Insect-Model in memory..")
     global model, md, dtcdir
-    md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-1])
-    model = InsectModel('insectmodel.h5', md.img_dim, len(md.target_classes)).load()
+    md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-2])
+    model = InsectModel('insectmodel_3.h5', md.img_dim, len(md.target_classes)).load()
 
 def get_stats():
     logger.debug("Attempting to get cpu temperature")
@@ -585,12 +585,12 @@ if __name__=="__main__":
 
     space1              = Drawing(imgproc_box, align='top')
     space1.rectangle(10,10,60,60, color=background)
-    snap_button         = PushButton(imgproc_box, command=snap, text="CAPTURE", align='top')
-    calib_button        = PushButton(imgproc_box, command=calibrate, text="CALIBRATE", align='top')
-    crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top')
-    segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top')
-    detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top')
-    predict_button      = PushButton(imgproc_box, command=predict, text="PREDICT", align='top')
+    snap_button         = PushButton(imgproc_box, command=snap, text="CAPTURE", align='top', image='icons/camera.png')
+    calib_button        = PushButton(imgproc_box, command=calibrate, text="CALIBRATE", align='top', image='icons/calibrate.png')
+    crop_button         = PushButton(imgproc_box, command=crop, text="CROP", align='top', image='icons/crop.png')
+    segment_button      = PushButton(imgproc_box, command=segment, text="SEGMENT", align='top', image='icons/segment.png')
+    detect_button       = PushButton(imgproc_box, command=detect, text="DETECT", align='top', image='icons/detect.png')
+    predict_button      = PushButton(imgproc_box, command=predict, text="PREDICT", align='top', image='icons/predict.png')
     space2              = Drawing(imgproc_box, align='top')
     space2.rectangle(10,10,60,60, color=background)
 
@@ -598,9 +598,9 @@ if __name__=="__main__":
     # FULLRUN BOX
     fullrun_box         = Box(app, width="fill", align="right", grid=[1,3])
     
-    openval_button      = PushButton(fullrun_box, command=open_validation_window, text="3. VALIDATE PREDICTIONS", align='right')
-    predict_bt          = PushButton(fullrun_box, command=predict, text="2. MODEL INFERENCE", align='right')
-    fullrun_bt          = PushButton(fullrun_box, command=full_run, text="1. PROCESS IMAGE", align='right')
+    openval_button      = PushButton(fullrun_box, command=open_validation_window, text="3. VALIDATE PREDICTIONS", align='right', image='icons/validate.png')
+    predict_bt          = PushButton(fullrun_box, command=predict, text="2. MODEL INFERENCE", align='right', image='icons/model.png')
+    fullrun_bt          = PushButton(fullrun_box, command=full_run, text="1. PROCESS IMAGE", align='right', image='icons/process.png')
 
 
     # VALIDATION WINDOW
@@ -617,8 +617,8 @@ if __name__=="__main__":
                                     command=select_verified,    
                                     selected="UNVERIFIED", 
                                     align='top')
-    next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top')
-    prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top')
+    next_val_button     = PushButton(val_window, command=next_val, text="NEXT", align='top', image='icons/next1.png')
+    prev_val_button     = PushButton(val_window, command=prev_val, text="PREVIOUS", align='top', image='icons/prev.png')
     detectioninfo_str   = Text(val_window, align='top')
     detectioninfo_str.value = 'DETECTION #?'
     predictioninfo_str  = Text(val_window, align='top')
