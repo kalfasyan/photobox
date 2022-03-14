@@ -21,7 +21,8 @@ for p in [default_cal_path, default_log_path, default_ses_path]:
     if not os.path.exists(p):
         os.makedirs(p)
 
-confidence_threshold = int(config.get('app','confidence_threshold'))
+confidence_threshold = float(config.get('app','confidence_threshold'))
+minconf_threshold = float(config.get('app','minconf_threshold'))
 dht22_pin = int(config.get('dht22', 'pin'))
 if str(config.get('dht22', 'installed')) == "True":
     dht22_sensor = True
@@ -36,3 +37,4 @@ with open("INSECTS.txt", "r") as f:
 
 with open("CRITICAL_INSECTS.txt", "r") as f:
     critical_insects = f.read().split('\n')
+critical_insects = list(filter(None, critical_insects))

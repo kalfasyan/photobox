@@ -1,7 +1,7 @@
 from shutil import copy2
 from tqdm import tqdm
 import numpy as np
-from common import default_ses_path
+from common import default_ses_path, minconf_threshold, confidence_threshold
 import pathlib
 import os
 
@@ -119,11 +119,11 @@ def save_insect_crops(specifications, path_crops, plate_img):
         crop = Image.fromarray(crop)
         crop.save(f"{savepath}/{row.pname}_{row.name}.png")
 
-def overlay_yolo(specifications, plate_img, class_selection, confidence_threshold=75., top_class='wmv'):
+def overlay_yolo(specifications, plate_img, class_selection, confidence_threshold=confidence_threshold, top_class='wmv'):
     import cv2
 
     assert top_class in class_selection, "Top class does not belong in class selection."
-    assert confidence_threshold > 20, "Threshold too low. Set it above 20."
+    # assert confidence_threshold > 20, "Threshold too low. Set it above 20."
 
     H,W,_ = plate_img.shape
     print(specifications)
@@ -140,9 +140,9 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
             if(top < 0): top = 0;
             if(bot > H-1): bot = H-1;
 
-            if row.prediction in [top_class] or row[top_class] > 20.:
+            if row.prediction in [top_class] or row[top_class] >= minconf_threshold:
             # Draws a box if the prediction is 'top_class' or if the % for it is more than 20
-                if row.top_prob > row[top_class] > 20.:
+                if row.top_prob > row[top_class] >=minconf_threshold:
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 0, 0), 2)
                     cv2.putText(plate_img, f"{row.insect_id},{top_class}.{row[top_class]/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
                 elif row.top_prob < confidence_threshold:

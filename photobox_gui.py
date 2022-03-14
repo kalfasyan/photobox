@@ -79,7 +79,7 @@ def snap():
     global sp
     sp = StickyPlate(full_platepath, caldir)
 
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=blankimgwidth-100), grid=[1,2])
     pic_path.value = full_platepath
 
 def calibrate():
@@ -90,7 +90,7 @@ def calibrate():
     sp.undistort(inplace=True)
     # sp.colorcorrect(inplace=True)
 
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=blankimgwidth-100), grid=[1,2])
 
 def segment():
     try:
@@ -100,7 +100,7 @@ def segment():
     assert sp.undistorted
     sp.threshold_image(threshold=127)
 
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.thresholded), basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.thresholded), basewidth=blankimgwidth-100), grid=[1,2])
 
 def crop():
     try:
@@ -111,7 +111,7 @@ def crop():
     assert not sp.cropped, "Already cropped"
     sp.crop_image(height_pxls=100, width_pxls=120)
 
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=blankimgwidth-100), grid=[1,2])
 
 def detect():
     try:
@@ -122,10 +122,10 @@ def detect():
     assert sp.undistorted
     assert sp.segmented, "Segment image first"
     
-    sp.detect_objects(min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150)
+    sp.detect_objects(min_obj_area=5, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150)
     sp.save_detections(savepath=dtcdir)        
 
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image_bboxes), basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image_bboxes), basewidth=blankimgwidth-100), grid=[1,2])
 
 def predict():
     load_model_in_memory()
@@ -152,7 +152,7 @@ def predict():
 
     disp_img = overlay_yolo(df_vals, sp.image, insectoptions)
     print(df_vals.columns)
-    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-450), grid=[1,2])
+    pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=blankimgwidth-100), grid=[1,2])
     
     get_interesting_filenames()
     df_vals.to_csv("/home/pi/Desktop/df_vals_clean.csv")
@@ -188,7 +188,7 @@ def snap_detect():
 
         logger.info("Saved image")
 
-        pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=appwidth-450), grid=[1,2])
+        pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=blankimgwidth-100), grid=[1,2])
         pic_path.value = full_platepath
         del cam
     else:
@@ -344,15 +344,35 @@ def select_verified():
     print(df_vals[['insect_id','prediction','user_input','verified']])
 
 def get_interesting_filenames():
+    from itertools import chain
+    from common import minconf_threshold
+    
     global dtcdir, df_vals
 
     # Delete insect detections that are not important
-    list_delete_detections = df_vals[~df_vals.prediction.isin(critical_insects)].filepath.tolist()
-    for filepath in list_delete_detections:
-        logger.info(f"Removing {filepath}")
-        os.remove(filepath)
+    df_vals.to_csv("/home/pi/Desktop/df_vals_debug.csv")
+    
+
+    try:
+        # Get a list of filepaths for each row in df_vals that had more than minconf_threshold for a critical insect
+        # this list will contain filepaths that will not be deleted 
+        list_keep_detections = [df_vals[df_vals[f"{i}"]>=minconf_threshold].filepath.tolist() for i in critical_insects]
+        if not len(list_keep_detections): 
+            logger.info("Minimum threshold not crossed for any critical insect")
+        list_keep_detections = list(chain.from_iterable(list_keep_detections))
+        list_keep_detections.extend(df_vals[df_vals.prediction.isin(critical_insects)].filepath.tolist()) 
+    except:
+        # if that list is empty then define the list only based on the top prediction
+        list_keep_detections = df_vals[df_vals.prediction.isin(critical_insects)].filepath.tolist()
+    
+    # Delete files that are not of interest (no critical insect detections)
+    for filepath in df_vals.filepath.tolist():
+        if filepath not in list_keep_detections:
+            logger.info(f"Removing {filepath}")
+            os.remove(filepath)
+
     # Removing uninteresting insect detections from dataframe
-    df_vals.drop(df_vals[~df_vals.prediction.isin(critical_insects)].index, inplace=True)
+    df_vals = df_vals[df_vals.filepath.isin(list_keep_detections)] #.drop(df_vals[~df_vals.prediction.isin(critical_insects)].index, inplace=True)
     # Resetting index
     df_vals.reset_index(drop=True, inplace=True)
     # Resetting insect_id
@@ -370,11 +390,11 @@ def open_validation_window():
     global dtcdir, detections_list, val_idx, insect_idx, df_vals, critical_insects, confidence_threshold
 
     df_vals.filepath = pd.Series(natsorted(os.listdir(dtcdir))).apply(lambda x: 'detections/'+x)
-    print(df_vals[['insect_id','prediction','user_input']])
 
     val_idx = 0
     # List of all detections' filenames
     detections_list = natsorted([str(fname) for fname in pathlib.Path(dtcdir).glob('**/*.png')])
+    assert len(detections_list), "No critical insects detected. Nothing to verify."
     # Display image of the validations window
     val_img.image = detections_list[val_idx]
     # Insect index taken from the filename
