@@ -21,8 +21,18 @@ for p in [default_cal_path, default_log_path, default_ses_path]:
     if not os.path.exists(p):
         os.makedirs(p)
 
-confidence_threshold = float(config.get('app','confidence_threshold'))
-minconf_threshold = float(config.get('app','minconf_threshold'))
+confidence_threshold    = float(config.get('app','confidence_threshold'))
+minconf_threshold       = float(config.get('app','minconf_threshold'))
+modelname               = config.get('app', 'modelname')
+crop_pxls_top           = int(config.get('app', 'crop_pxls_top'))
+crop_pxls_bot           = int(config.get('app', 'crop_pxls_bot'))
+crop_pxls_left          = int(config.get('app', 'crop_pxls_left'))
+crop_pxls_right         = int(config.get('app', 'crop_pxls_right'))
+bnw_threshold           = int(config.get('app', 'bnw_threshold'))
+min_obj_area            = int(config.get('app', 'min_obj_area'))
+max_obj_area            = int(config.get('app', 'max_obj_area'))
+nms_threshold           = float(config.get('app', 'nms_threshold'))
+
 dht22_pin = int(config.get('dht22', 'pin'))
 if str(config.get('dht22', 'installed')) == "True":
     dht22_sensor = True

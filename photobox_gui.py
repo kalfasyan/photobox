@@ -36,7 +36,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 global cpu_temperature, insectoptions, confidence_threshold
 cpu_temperature = 'NA'
 
-global default_log_path, default_ses_path, default_cal_path, caldir, default_prj_path
+global default_log_path, default_ses_path, default_cal_path, caldir, default_prj_path,modelname
 currdir_full = f'{default_ses_path}/{datetime.now().strftime("%Y%m%d")}'
 if not os.path.isdir(default_ses_path):
     os.mkdir(default_ses_path)
@@ -98,7 +98,7 @@ def segment():
     except:
         logger.info("Take a picture first.")
     assert sp.undistorted
-    sp.threshold_image(threshold=127)
+    sp.threshold_image()
 
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.thresholded), basewidth=blankimgwidth-100), grid=[1,2])
 
@@ -109,7 +109,7 @@ def crop():
         logger.info("Take a picture first.")
     assert sp.undistorted
     assert not sp.cropped, "Already cropped"
-    sp.crop_image(height_pxls=100, width_pxls=120)
+    sp.crop_image()
 
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image), basewidth=blankimgwidth-100), grid=[1,2])
 
@@ -122,7 +122,7 @@ def detect():
     assert sp.undistorted
     assert sp.segmented, "Segment image first"
     
-    sp.detect_objects(min_obj_area=5, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150)
+    sp.detect_objects()
     sp.save_detections(savepath=dtcdir)        
 
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(sp.image_bboxes), basewidth=blankimgwidth-100), grid=[1,2])
@@ -141,17 +141,20 @@ def predict():
 
     global model, dtcdir, md, expdir
     md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-2])
+    
+    md.df['full_filename'] = md.df['filename']
+    md.df['filename'] = md.df.filename.apply(lambda x: x.split('/')[-1])
+    
     md.create_data_generator()
-    md.get_predictions(model, sp)
+    md.get_predictions(model)
 
     global df_vals
-    df_vals = pd.merge(md.df, sp.yolo_specs, on=['insect_id','yolo_x','yolo_y','yolo_width','yolo_height','pname'])
+    df_vals = pd.merge(md.df, sp.yolo_specs, on=['insect_idx'])
     df_vals['user_input'] = 'UNKNOWN'
     df_vals['verified'] = 'UNVERIFIED'
     df_vals.to_csv("/home/pi/Desktop/df_vals.csv")
 
     disp_img = overlay_yolo(df_vals, sp.image, insectoptions)
-    print(df_vals.columns)
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=blankimgwidth-100), grid=[1,2])
     
     get_interesting_filenames()
@@ -229,9 +232,11 @@ def select_date():
 def enter_notes():
     logger.info("Notes button pressed")
     givennotes = app.question("Plate notes", "Give some extra location-notes regarding the plate. e.g. 1-60, centroid etc.")
+    platenotes_str.value = "NA"
     if len(givennotes) <= 10:
         platenotes_str.value = givennotes
     else:
+        platenotes_str.value = "NA"
         app.error(title='Error', text='Length of text provided is too long. Up to 10 characters allowed.')
 
 def date_validation(date_text):
@@ -335,13 +340,13 @@ def select_insect():
     global detections_list, val_idx, insect_idx, df_vals
     logger.info(f"Selected insect: {insect_button.value}")
     df_vals.at[insect_idx, 'user_input'] = insect_button.value
-    print(df_vals[['insect_id','prediction','user_input']])
+    print(df_vals[['insect_idx','prediction','user_input']])
 
 def select_verified():
     global insect_idx, df_vals
     logger.info(f"Selected: {verify_button.value}")
     df_vals.at[insect_idx, 'verified'] = verify_button.value
-    print(df_vals[['insect_id','prediction','user_input','verified']])
+    print(df_vals[['insect_idx','prediction','user_input','verified']])
 
 def get_interesting_filenames():
     from itertools import chain
@@ -351,32 +356,31 @@ def get_interesting_filenames():
 
     # Delete insect detections that are not important
     df_vals.to_csv("/home/pi/Desktop/df_vals_debug.csv")
-    
 
     try:
         # Get a list of filepaths for each row in df_vals that had more than minconf_threshold for a critical insect
         # this list will contain filepaths that will not be deleted 
-        list_keep_detections = [df_vals[df_vals[f"{i}"]>=minconf_threshold].filepath.tolist() for i in critical_insects]
+        list_keep_detections = [df_vals[df_vals[f"{i}"]>=minconf_threshold].full_filename.tolist() for i in critical_insects]
         if not len(list_keep_detections): 
             logger.info("Minimum threshold not crossed for any critical insect")
         list_keep_detections = list(chain.from_iterable(list_keep_detections))
-        list_keep_detections.extend(df_vals[df_vals.prediction.isin(critical_insects)].filepath.tolist()) 
+        list_keep_detections.extend(df_vals[df_vals.prediction.isin(critical_insects)].full_filename.tolist()) 
     except:
         # if that list is empty then define the list only based on the top prediction
-        list_keep_detections = df_vals[df_vals.prediction.isin(critical_insects)].filepath.tolist()
+        list_keep_detections = df_vals[df_vals.prediction.isin(critical_insects)].full_filename.tolist()
     
     # Delete files that are not of interest (no critical insect detections)
-    for filepath in df_vals.filepath.tolist():
+    for filepath in df_vals.full_filename.tolist():
         if filepath not in list_keep_detections:
             logger.info(f"Removing {filepath}")
             os.remove(filepath)
 
     # Removing uninteresting insect detections from dataframe
-    df_vals = df_vals[df_vals.filepath.isin(list_keep_detections)] #.drop(df_vals[~df_vals.prediction.isin(critical_insects)].index, inplace=True)
+    df_vals = df_vals[df_vals.full_filename.isin(list_keep_detections)] #.drop(df_vals[~df_vals.prediction.isin(critical_insects)].index, inplace=True)
     # Resetting index
     df_vals.reset_index(drop=True, inplace=True)
-    # Resetting insect_id
-    df_vals.insect_id = df_vals.index.values
+    # Resetting insect_idx
+    df_vals['insect_idx'] = df_vals.index.values
     # Resetting filenames # TODO: this destroys the matching of detection # and insect_idx on prediction
     for i,f in enumerate(natsorted(os.listdir(dtcdir))):
         oldfilename = '_'.join(f.split('_')[:-1])
@@ -480,7 +484,7 @@ def save_and_reset():
     # Create the filenames of the exports
     new_paths = []
     for i, row in df_vals.iterrows():
-       new_paths.append(f"{expdir}/{row.user_input}/{row.filepath.split('/')[-1][:-4]}_{row.prediction}_{row.user_input}_{row.verified}.png")
+       new_paths.append(f"{expdir}/{row.user_input}/{row.full_filename.split('/')[-1][:-4]}_{row.prediction}_{row.user_input}_{row.verified}.png")
     # Moving detections to the exports folder
     for i in range(len(new_paths)):
         oldpath = f"{dtcdir}/{df_vals.filepath.tolist()[i].replace('detections/','')}"
@@ -527,9 +531,10 @@ def check_calib_done():
 
 def load_model_in_memory():
     logger.info("Loading Insect-Model in memory..")
-    global model, md, dtcdir
+    global model, md, dtcdir, modelname
+    assert len(os.listdir(dtcdir)), "No insects detected (yet).."
     md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-2])
-    model = InsectModel('insectmodel_3.h5', md.img_dim, len(md.target_classes)).load()
+    model = InsectModel(img_dim=md.img_dim, nb_classes=len(md.target_classes), modelname=modelname).load()
 
 def get_stats():
     logger.debug("Attempting to get cpu temperature")

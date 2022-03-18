@@ -1,11 +1,14 @@
 bl
-c
+wswl
+sp
+t
+sw
 k
 m
-sw
-t
+c
 v
 wmv
 wrl
+other
 NOT_AN_INSECT
 UNKNOWN

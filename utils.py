@@ -98,7 +98,7 @@ def save_insect_crops(specifications, path_crops, plate_img):
     
     H,W,_ = plate_img.shape
 
-    for _, row in tqdm(specifications.iterrows(), desc="Saving detections.."):
+    for _, row in tqdm(specifications.iterrows(), total=specifications.shape[0], desc="Saving detections.."):
         left  = int((row.yolo_x-row.yolo_width/2.)*W)
         right = int((row.yolo_x+row.yolo_width/2.)*W)
         top   = int((row.yolo_y-row.yolo_height/2.)*H)
@@ -119,15 +119,15 @@ def save_insect_crops(specifications, path_crops, plate_img):
         crop = Image.fromarray(crop)
         crop.save(f"{savepath}/{row.pname}_{row.name}.png")
 
-def overlay_yolo(specifications, plate_img, class_selection, confidence_threshold=confidence_threshold, top_class='wmv'):
+def overlay_yolo(specifications, plate_img, class_selection, confidence_threshold=confidence_threshold, top_classes=['wmv','wswl']):
     import cv2
 
-    assert top_class in class_selection, "Top class does not belong in class selection."
+    assert all(i in class_selection for i in top_classes), "Top class does not belong in class selection."
     # assert confidence_threshold > 20, "Threshold too low. Set it above 20."
 
     H,W,_ = plate_img.shape
     print(specifications)
-    for _, row in tqdm(specifications.iterrows(), "Overlaying bboxes with predictions.."):
+    for _, row in tqdm(specifications.iterrows(), total=specifications.shape[0], desc="Overlaying bboxes with predictions.."):
         if row.prediction in class_selection:
 
             left  = int((row.yolo_x-row.yolo_width/2.)*W)
@@ -140,20 +140,21 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
             if(top < 0): top = 0;
             if(bot > H-1): bot = H-1;
 
-            if row.prediction in [top_class] or row[top_class] >= minconf_threshold:
+            if row.prediction in [top_classes] or (row[top_classes] >= minconf_threshold).any():
             # Draws a box if the prediction is 'top_class' or if the % for it is more than 20
-                if row.top_prob > row[top_class] >=minconf_threshold:
+                if (row.top_prob > row[top_classes]).any() and (row[top_classes] >=minconf_threshold).any():
+                    max_of_top_classes = row[top_classes].index[row[top_classes].values.argmax()]
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 0, 0), 2)
-                    cv2.putText(plate_img, f"{row.insect_id},{top_class}.{row[top_class]/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
+                    cv2.putText(plate_img, f"{row.insect_idx},{max_of_top_classes}.{row[max_of_top_classes]/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
                 elif row.top_prob < confidence_threshold:
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 0, 0), 2)
-                    cv2.putText(plate_img, f"{row.insect_id},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
+                    cv2.putText(plate_img, f"{row.insect_idx},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
                 else:
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 255, 0), 2)
-                    cv2.putText(plate_img, f"{row.insect_id},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0,255,0), 2)
+                    cv2.putText(plate_img, f"{row.insect_idx},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0,255,0), 2)
             else:
                 cv2.rectangle(plate_img, (left, top), (right, bot), (0, 0, 255), 2)
-                cv2.putText(plate_img, f"{row.insect_id},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0, 0, 255), 2)
+                cv2.putText(plate_img, f"{row.insect_idx},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0, 0, 255), 2)
             
     return plate_img
 

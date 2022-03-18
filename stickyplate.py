@@ -10,9 +10,11 @@ from tqdm import tqdm
 from matplotlib import cm
 import logging
 import warnings
+from common import crop_pxls_top, crop_pxls_bot, crop_pxls_left, crop_pxls_right, nms_threshold, bnw_threshold, min_obj_area, max_obj_area
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 logger = logging.getLogger(__name__)
+
 class StickyPlate(object):
 
     def __init__(self, path, chessboard_dir):
@@ -171,24 +173,24 @@ class StickyPlate(object):
         else:
             self.calibrated = (calibrated * 255).astype(np.uint8)
 
-    def crop_image(self, height_pxls=100, width_pxls=120):
+    def crop_image(self, crop_pxls_top=crop_pxls_top, crop_pxls_bot=crop_pxls_bot, crop_pxls_left=crop_pxls_left, crop_pxls_right=crop_pxls_right):
         logger.info("Cropping..")
 
         print(f"Original image shape: {self.image.shape}")
         height,width = self.image.shape[:2]
-        self.image = self.image[height_pxls:height-height_pxls,
-                                width_pxls:width-width_pxls]
+        self.image = self.image[crop_pxls_top:height-crop_pxls_bot,
+                                crop_pxls_left:width-crop_pxls_right]
         self.H, self.W = self.image.shape[:2]
 
         print(f"New image shape: {self.image.shape}")
 
-    def threshold_image(self, threshold=127):
+    def threshold_image(self, bnw_threshold=bnw_threshold):
         logger.info("Thresholding..")
 
         self.gray = cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY)
         self.blurred = cv2.medianBlur(self.gray,5)
 
-        ret,th1 = cv2.threshold(self.blurred,threshold,255,cv2.THRESH_BINARY)
+        ret,th1 = cv2.threshold(self.blurred,bnw_threshold,255,cv2.THRESH_BINARY)
         kernel = np.ones((3,3), np.uint8)
         th1 = cv2.dilate(th1, kernel, iterations=1)
 
@@ -196,7 +198,7 @@ class StickyPlate(object):
         self.pil_thresholded = Image.fromarray(th1)
         self.segmented = True
 
-    def detect_objects(self, min_obj_area=15, max_obj_area=6000, nms_threshold=0.08, insect_img_dim=150):
+    def detect_objects(self, min_obj_area=min_obj_area, max_obj_area=max_obj_area, nms_threshold=nms_threshold, insect_img_dim=150):
         logger.info("Detecting objects..")
 
         assert hasattr(self, 'thresholded'), "Threshold the image before detecting objects."
@@ -231,7 +233,7 @@ class StickyPlate(object):
             
         yolo_specs = pd.DataFrame({"yolo_x":yolo_x, "yolo_y":yolo_y, "yolo_width":yolo_w, "yolo_height":yolo_h})
         yolo_specs['pname'] = self.pname
-        yolo_specs['insect_id'] = yolo_specs.index.values.astype(str)    
+        yolo_specs['insect_idx'] = yolo_specs.index.values.astype(str)    
         self.yolo_specs = yolo_specs
         self.detected = True
 
