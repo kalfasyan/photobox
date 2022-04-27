@@ -117,7 +117,11 @@ class InsectModel(object):
         
         if self.modelname.startswith("dense"):
             num_ftrs = model.classifier.in_features
-            model.classifier = nn.Linear(num_ftrs,len(oe_insect_names))
+            model.classifier = nn.Sequential(
+                                        nn.Linear(num_ftrs,512),
+                                        nn.ReLU(),
+                                        nn.Dropout(0.5),
+                                        nn.Linear(512, self.nb_classes))
         if self.modelname.startswith("resn"):
             num_ftrs = model.fc.in_features
             model.fc = nn.Linear(num_ftrs,len(oe_insect_names))
@@ -286,7 +290,9 @@ def load_checkpoint(filename, model, optimizer):
     import torch
     assert isinstance(filename, str) and filename.endswith('pth.tar'), "Only works with a pth.tar file."
     checkpoint = torch.load(filename, map_location=torch.device('cpu'))
+    
     model.load_state_dict(checkpoint['state_dict'])
+    
     optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
 

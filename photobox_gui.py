@@ -22,11 +22,12 @@ from guizero import *
 from PIL import Image
 from scipy.io.wavfile import write
 from scipy.signal import savgol_filter
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(font_scale=1.4)
 
 from camera import *
 from common import *
-from snap_detect import *
-from lights import *
 from stickyplate import StickyPlate, resize_pil_image
 from detections import *
 from utils import get_cpu_temperature, make_session_dirs
@@ -66,8 +67,14 @@ logger = logging.getLogger(__name__)
 # ------------- START CAMERA FUNCTIONS -------------
 
 def snap():
+    from configparser import ConfigParser
+    config = ConfigParser()
+    config.read(config_path)
+    w = int(config.get(camera, 'width'))
+    h = int(config.get(camera, 'height'))
+
     cam = CameraHandler()
-    w, h = cam.camera.resolution
+
     plateloc = plateloc_bt.value
     plateinfo = platenotes_str.value if len(platenotes_str.value) else "NA"
     platedate = platedate_str.value
@@ -152,13 +159,13 @@ def predict():
     df_vals = pd.merge(md.df, sp.yolo_specs, on=['insect_idx'])
     df_vals['user_input'] = 'UNKNOWN'
     df_vals['verified'] = 'UNVERIFIED'
-    df_vals.to_csv("/home/pi/Desktop/df_vals.csv")
+    df_vals.to_csv("~/Desktop/debugging/df_vals_before_overlay.csv")
 
     disp_img = overlay_yolo(df_vals, sp.image, insectoptions)
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=blankimgwidth-100), grid=[1,2])
-    
+    df_vals.to_csv("~/Desktop/debugging/df_vals_after_overlay.csv")
     get_interesting_filenames()
-    df_vals.to_csv("/home/pi/Desktop/df_vals_clean.csv")
+    df_vals.to_csv("~/Desktop/debugging/df_vals_after_cleaning.csv")
     
 def snap_detect():
     if len(platedate_str.value):
@@ -355,7 +362,7 @@ def get_interesting_filenames():
     global dtcdir, df_vals
 
     # Delete insect detections that are not important
-    df_vals.to_csv("/home/pi/Desktop/df_vals_debug.csv")
+    df_vals.to_csv("~/Desktop/debugging/df_vals_debug.csv")
 
     try:
         # Get a list of filepaths for each row in df_vals that had more than minconf_threshold for a critical insect
@@ -377,14 +384,21 @@ def get_interesting_filenames():
 
     # Removing uninteresting insect detections from dataframe
     df_vals = df_vals[df_vals.full_filename.isin(list_keep_detections)] #.drop(df_vals[~df_vals.prediction.isin(critical_insects)].index, inplace=True)
-    # Resetting index
-    df_vals.reset_index(drop=True, inplace=True)
     # Resetting insect_idx
     df_vals['insect_idx'] = df_vals.index.values
+    # Creating a new index for scrolling through insects
+    df_vals['scroll_idx'] = df_vals.index.tolist()
+    # Resetting index
+    df_vals.reset_index(drop=True, inplace=True)
     # Resetting filenames # TODO: this destroys the matching of detection # and insect_idx on prediction
     for i,f in enumerate(natsorted(os.listdir(dtcdir))):
         oldfilename = '_'.join(f.split('_')[:-1])
-        newfilename = oldfilename + f'_{i}.png'
+        old_index = f.split('_')[-1][:-4]
+        print(f"f: {f}")
+        print(f"oldfilename: {oldfilename}")
+        print(f"old_index: {old_index}")
+        newfilename = oldfilename + f'_{i}_{old_index}.png'
+        print(f"newfilename: {newfilename}")
 
         shutil.move(f"{dtcdir}/{f}", f"{dtcdir}/{newfilename}")
 
@@ -393,18 +407,23 @@ def open_validation_window():
 
     global dtcdir, detections_list, val_idx, insect_idx, df_vals, critical_insects, confidence_threshold
 
-    df_vals.filepath = pd.Series(natsorted(os.listdir(dtcdir))).apply(lambda x: 'detections/'+x)
+    natsorted_detections = natsorted(os.listdir(dtcdir))
+    df_vals.filepath = pd.Series(natsorted_detections)
+    df_vals.filepath = df_vals.filepath.apply(lambda x: 'detections/'+x)
 
     val_idx = 0
+    print(val_idx)
     # List of all detections' filenames
     detections_list = natsorted([str(fname) for fname in pathlib.Path(dtcdir).glob('**/*.png')])
     assert len(detections_list), "No critical insects detected. Nothing to verify."
+    print(detections_list)
     # Display image of the validations window
+    print(detections_list[val_idx])
     val_img.image = detections_list[val_idx]
     # Insect index taken from the filename
-    insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
+    insect_idx = df_vals.loc[val_idx].insect_idx #int(detections_list[val_idx].split('_')[-1][:-4])
     # All insect probability scores taken from df_vals
-    pred_dict = df_vals[insectoptions[:-2]].loc[insect_idx].apply(lambda x: int(round(x,0))).sort_values(ascending=False).to_dict()
+    pred_dict = df_vals[insectoptions[:-2]].loc[val_idx].apply(lambda x: int(round(x,0))).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
     pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
     # Displaying the detection number (bounding box number)
@@ -412,12 +431,14 @@ def open_validation_window():
     # Displaying all probabilities per insect class
     predictioninfo_str.value = f'{pred_str}'
     # Setting and displaying the drop-down insect class button to the chosen value
-    insect_button.value = df_vals.loc[insect_idx].user_input
+    insect_button.value = df_vals.loc[val_idx].user_input
     # Drop-down verification button (VERIFIED/UNVERIFIED)
-    verify_button.value = df_vals.loc[insect_idx].verified
+    verify_button.value = df_vals.loc[val_idx].verified
     # Setting a class name for insects with high prediction confidence value
-    if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
-        insect_button.value = df_vals.loc[insect_idx].prediction
+    if not df_vals.loc[val_idx].uncertain and verify_button.value == "UNVERIFIED":
+        insect_button.value = df_vals.loc[val_idx].prediction
+
+    df_vals.to_csv("~/Desktop/debugging/df_vals_after_valwindow.csv")
 
     val_window.show()
 
@@ -432,16 +453,16 @@ def next_val():
         val_idx = 0
         val_img.image = detections_list[val_idx]
 
-    insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    pred_dict = df_vals[insectoptions[:-2]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    insect_idx = df_vals.loc[val_idx].insect_idx #insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
+    pred_dict = df_vals[insectoptions[:-2]].loc[val_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
     pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
     detectioninfo_str.value = f'DETECTION #{insect_idx}'
     predictioninfo_str.value = f'{pred_str}'
-    insect_button.value = df_vals.loc[insect_idx].user_input
-    verify_button.value = df_vals.loc[insect_idx].verified
-    if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
-        insect_button.value = df_vals.loc[insect_idx].prediction
+    insect_button.value = df_vals.loc[val_idx].user_input
+    verify_button.value = df_vals.loc[val_idx].verified
+    if not df_vals.loc[val_idx].uncertain and verify_button.value == "UNVERIFIED":
+        insect_button.value = df_vals.loc[val_idx].prediction
 
 def prev_val():
     """ Similar to open_validation_window """
@@ -454,16 +475,16 @@ def prev_val():
         val_idx = len(detections_list)-1
         val_img.image = detections_list[val_idx]
 
-    insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
-    pred_dict = df_vals[insectoptions[:-2]].loc[insect_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
+    insect_idx = df_vals.loc[val_idx].insect_idx #insect_idx = int(detections_list[val_idx].split('_')[-1][:-4])
+    pred_dict = df_vals[insectoptions[:-2]].loc[val_idx].apply(lambda x: round(x,1)).sort_values(ascending=False).to_dict()
     pred_str = str(pred_dict)
     pred_str = pred_str[1:-1].replace('\'','').replace(': ',':').replace(',','%')+'%'
     detectioninfo_str.value = f'DETECTION #{insect_idx}'
     predictioninfo_str.value = f'{pred_str}'
-    insect_button.value = df_vals.loc[insect_idx].user_input
-    verify_button.value = df_vals.loc[insect_idx].verified    
-    if not df_vals.loc[insect_idx].uncertain and verify_button.value == "UNVERIFIED":
-        insect_button.value = df_vals.loc[insect_idx].prediction
+    insect_button.value = df_vals.loc[val_idx].user_input
+    verify_button.value = df_vals.loc[val_idx].verified    
+    if not df_vals.loc[val_idx].uncertain and verify_button.value == "UNVERIFIED":
+        insect_button.value = df_vals.loc[val_idx].prediction
 
 def close_validation_window():
     val_window.hide()
@@ -492,6 +513,32 @@ def save_and_reset():
 
         shutil.move(oldpath, newpath, copy_function=shutil.copy2)
 
+
+    # Exporting results in a csv
+    assert df_vals.pname.unique().shape[0] == 1, "More sticky plates in dataframe?"
+    platename = df_vals.pname.unique()[0]
+    df_vals.to_csv(f"{currdir_full}/{platename}_dataframe_all_results.csv")
+    df_vals.top_class.value_counts().to_csv(f"{currdir_full}/{platename}_dataframe_pests_model_results.csv")
+    df_vals.user_input.value_counts().to_csv(f"{currdir_full}/{platename}_dataframe_pests_user_results.csv")
+
+    
+    # Creating some summary plots to export    
+    if not os.path.isdir(f"{currdir_full}/plots/"):
+        os.makedirs(f"{currdir_full}/plots/")
+
+    plt.figure()
+    df_vals.top_class.value_counts().plot(kind='bar')
+    plt.title(platename)
+    plt.savefig(f"{currdir_full}/plots/{platename}_model_prediction_summary.png", bbox_inches='tight')
+    plt.close()
+    
+    plt.figure()
+    df_vals.user_input.value_counts().plot(kind='bar')
+    plt.title(platename)
+    plt.savefig(f"{currdir_full}/plots/{platename}_user_input_summary.png", bbox_inches='tight')
+    plt.close()
+
+    
     memory_reset()
     val_window.hide()
 
@@ -550,8 +597,6 @@ def get_stats():
 # ------------------------------------
 # ------------- MAIN -----------------
 if __name__=="__main__":
-
-    setup_lights()
 
     app = App(title="Photobox v1.0", layout="grid", width=appwidth, height=appheight, bg = background)
 

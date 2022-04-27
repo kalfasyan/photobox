@@ -16,8 +16,9 @@ default_ses_path = str(config.get('app', 'default_ses_path'))
 default_log_path = str(config.get('app', 'default_log_path'))
 default_cal_path = str(config.get('app', 'default_cal_path'))
 default_prj_path = str(config.get('app', 'default_prj_path'))
+default_deb_path = str(config.get('app', 'default_deb_path'))
 
-for p in [default_cal_path, default_log_path, default_ses_path]:
+for p in [default_cal_path, default_log_path, default_ses_path, default_deb_path]:
     if not os.path.exists(p):
         os.makedirs(p)
 

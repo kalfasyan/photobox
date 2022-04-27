@@ -140,15 +140,19 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
             if(top < 0): top = 0;
             if(bot > H-1): bot = H-1;
 
-            if row.prediction in [top_classes] or (row[top_classes] >= minconf_threshold).any():
-            # Draws a box if the prediction is 'top_class' or if the % for it is more than 20
-                if (row.top_prob > row[top_classes]).any() and (row[top_classes] >=minconf_threshold).any():
+            if row.prediction in top_classes or (row[top_classes] >= minconf_threshold).any():
+                #print(f"row.prediction:{row.prediction} in [top_classes]: {top_classes}")
+                # if any of the top classes has larger prob than minconf_threshold AND NOT any of top classes has larger than confidence_threshold
+                #print(row[top_classes])
+                if (row[top_classes] >=minconf_threshold).any() and not (row[top_classes] >= confidence_threshold).any():
                     max_of_top_classes = row[top_classes].index[row[top_classes].values.argmax()]
+                    #print(f"max of two classes: {max_of_top_classes}")
+                    if max_of_top_classes == 'wmv' and row.wmv > confidence_threshold/2:
+                        cv2.rectangle(plate_img, (left, top), (right, bot), (0, 255, 0), 2)
+                        cv2.putText(plate_img, f"{row.insect_idx},{max_of_top_classes}.{row[max_of_top_classes]/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0,255,0), 2)
+                        continue                        
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 0, 0), 2)
                     cv2.putText(plate_img, f"{row.insect_idx},{max_of_top_classes}.{row[max_of_top_classes]/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
-                elif row.top_prob < confidence_threshold:
-                    cv2.rectangle(plate_img, (left, top), (right, bot), (255, 0, 0), 2)
-                    cv2.putText(plate_img, f"{row.insect_idx},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (255,0,0), 2)
                 else:
                     cv2.rectangle(plate_img, (left, top), (right, bot), (255, 255, 0), 2)
                     cv2.putText(plate_img, f"{row.insect_idx},{row.prediction}.{row.top_prob/100:.0%}", (left-10, top-20), cv2.FONT_HERSHEY_COMPLEX, 1., (0,255,0), 2)
@@ -159,10 +163,11 @@ def overlay_yolo(specifications, plate_img, class_selection, confidence_threshol
     return plate_img
 
 def get_cpu_temperature():
-    import subprocess
-    import re
-    tmp = subprocess.check_output(["vcgencmd measure_temp"], shell=True)
-    cputemp = tmp.decode('ascii')
-    cputemp = re.findall("\d+", cputemp)
-    cputemp = '.'.join(cputemp)
-    return cputemp
+    return ''
+    # import subprocess
+    # import re
+    # tmp = subprocess.check_output(["vcgencmd measure_temp"], shell=True)
+    # cputemp = tmp.decode('ascii')
+    # cputemp = re.findall("\d+", cputemp)
+    # cputemp = '.'.join(cputemp)
+    # return cputemp
