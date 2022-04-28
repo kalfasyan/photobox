@@ -24,13 +24,19 @@ res_height = int(config.get(camera, 'height'))
 class CameraHandler(object):
     def __init__(self) -> None:
         self.camera = cv2.VideoCapture(0)#,cv2.CAP_DSHOW)
-        self.camera.set(3, res_width)
-        self.camera.set(4, res_height)
- 
-        self.resolution = (self.camera.get(cv2.CAP_PROP_FRAME_WIDTH), self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
+   
         self.unsaved_capture = False
         logger.info("Warming up camera..")
+        time.sleep(.5)
+        self.camera.read()
+        print(f"Resolution defined in settings:\t ({res_width}, {res_height})")
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, res_width)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, res_height)
+        print("Auto white-balance enabled.")
+        self.camera.set(cv2.CAP_PROP_AUTO_WB, 1)
+        self.resolution = (int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        print(f"Camera resolution was set to:\t {self.resolution}")
+        # self.camera.release()
         time.sleep(.5)
 
     def get_possible_resolutions(self):
@@ -53,14 +59,15 @@ class CameraHandler(object):
         self.ret, self.frame = self.camera.read()
         if not self.ret:
             print("Failed to capture image..")
+            return None
 
         self.frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
         self.pil_image = Image.fromarray(self.frame)
         logger.info("Image captured.")
 
-        logger.info("Closing camera..")
+        logger.info("Releasing camera..")
         self.camera.release()
-        logger.info("Closed camera.")
+        logger.info("Camera released.")
         self.unsaved_capture = True
 
     def save(self, path):
