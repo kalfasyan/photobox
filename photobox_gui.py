@@ -67,13 +67,9 @@ logger = logging.getLogger(__name__)
 # ------------- START CAMERA FUNCTIONS -------------
 
 def snap():
-    from configparser import ConfigParser
-    config = ConfigParser()
-    config.read(config_path)
-    w = int(config.get(camera, 'width'))
-    h = int(config.get(camera, 'height'))
 
     cam = CameraHandler()
+    w,h = cam.resolution
 
     plateloc = plateloc_bt.value
     plateinfo = platenotes_str.value if len(platenotes_str.value) else "NA"
