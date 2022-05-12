@@ -24,12 +24,12 @@ class CameraHandler(object):
    
         self.unsaved_capture = False
         logger.info("Warming up camera..")
-        time.sleep(.5)
+        time.sleep(1.)
         self.camera.read()
         print(f"Resolution defined in settings:\t ({res_width}, {res_height})")
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, res_width)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, res_height)
-        print("Auto white-balance enabled.")
+        print("Enabling auto white-balance.")
         self.camera.set(cv2.CAP_PROP_AUTO_WB, 1)
         self.resolution = (int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
         print(f"Camera resolution was set to:\t {self.resolution}")

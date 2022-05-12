@@ -1,9 +1,23 @@
 import os
+from pathlib import Path
 from configparser import ConfigParser
 
 config = ConfigParser()
 config_path = './config.ini'
 config.read(config_path)
+
+# SETTING DIRECTORIES
+home_path = str(Path().home())
+curr_path = str(Path().absolute())
+default_ses_path = f"{home_path}/Desktop/PhotoBox/sessions"
+default_log_path = f"{home_path}/Desktop/PhotoBox/logs"
+default_cal_path = f"{curr_path}/calib"
+default_prj_path = curr_path
+default_deb_path = f"{home_path}/Desktop/PhotoBox/debugging"
+# CREATING DIRECTORIES
+for p in [default_cal_path, default_log_path, default_ses_path, default_deb_path]:
+    if not os.path.exists(p):
+        os.makedirs(p)
 
 # APP DIMENSIONS
 appwidth = int(config.get('app', 'width'))
@@ -12,16 +26,7 @@ background = config.get('app', 'backgroundcolor')
 blankimgheight = int(config.get('app', 'blankimgheight'))
 blankimgwidth = int(config.get('app', 'blankimgwidth'))
 
-default_ses_path = str(config.get('app', 'default_ses_path'))
-default_log_path = str(config.get('app', 'default_log_path'))
-default_cal_path = str(config.get('app', 'default_cal_path'))
-default_prj_path = str(config.get('app', 'default_prj_path'))
-default_deb_path = str(config.get('app', 'default_deb_path'))
-
-for p in [default_cal_path, default_log_path, default_ses_path, default_deb_path]:
-    if not os.path.exists(p):
-        os.makedirs(p)
-
+# APP SETTINGS
 confidence_threshold    = float(config.get('app','confidence_threshold'))
 minconf_threshold       = float(config.get('app','minconf_threshold'))
 modelname               = config.get('app', 'modelname')

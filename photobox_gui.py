@@ -30,20 +30,21 @@ from camera import *
 from common import *
 from stickyplate import StickyPlate, resize_pil_image
 from detections import *
-from utils import get_cpu_temperature, make_session_dirs
+from utils import get_cpu_temperature, make_session_dirs, make_dirs
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 global cpu_temperature, insectoptions, confidence_threshold
 cpu_temperature = 'NA'
 
-global default_log_path, default_ses_path, default_cal_path, caldir, default_prj_path,modelname
+global default_log_path, default_ses_path, default_cal_path, caldir, default_prj_path,modelname, debdir
 currdir_full = f'{default_ses_path}/{datetime.now().strftime("%Y%m%d")}'
 if not os.path.isdir(default_ses_path):
     os.mkdir(default_ses_path)
 if not os.path.isdir(currdir_full):
     os.mkdir(currdir_full)
 caldir = f"{default_cal_path}"
+debdir = f"{default_deb_path}"
 imgdir, antdir, dtcdir, expdir = make_session_dirs(curdir=currdir_full, paths=['images','annotations','detections','exports'])
 
 warnings.simplefilter("once", DeprecationWarning)
@@ -142,7 +143,7 @@ def predict():
     assert sp.segmented, "Segment image first"
     assert sp.detected, "Detect objects first"
 
-    global model, dtcdir, md, expdir
+    global model, dtcdir, md, expdir, debdir
     md = ModelDetections(dtcdir, img_dim=150, target_classes=insectoptions[:-2])
     
     md.df['full_filename'] = md.df['filename']
@@ -155,13 +156,13 @@ def predict():
     df_vals = pd.merge(md.df, sp.yolo_specs, on=['insect_idx'])
     df_vals['user_input'] = 'UNKNOWN'
     df_vals['verified'] = 'UNVERIFIED'
-    df_vals.to_csv("~/Desktop/debugging/df_vals_before_overlay.csv")
+    df_vals.to_csv(f"{debdir}/df_vals_before_overlay.csv")
 
     disp_img = overlay_yolo(df_vals, sp.image, insectoptions)
     pic_image = Picture(app, image=resize_pil_image(Image.fromarray(disp_img), basewidth=blankimgwidth-100), grid=[1,2])
-    df_vals.to_csv("~/Desktop/debugging/df_vals_after_overlay.csv")
+    df_vals.to_csv(f"{debdir}/df_vals_after_overlay.csv")
     get_interesting_filenames()
-    df_vals.to_csv("~/Desktop/debugging/df_vals_after_cleaning.csv")
+    df_vals.to_csv(f"{debdir}/df_vals_after_cleaning.csv")
     
 def snap_detect():
     if len(platedate_str.value):
@@ -260,11 +261,11 @@ def check_session_path(name, created_new=False):
         user_created_sesspath = name
 
     default_ses_path_parent = os.path.abspath(os.path.join(default_ses_path, os.pardir))
+    print(f"default_ses_path:{default_ses_path}")
+    print(f"user_created_sesspath:{user_created_sesspath}")
+    print(f"default_ses_path_parent:{default_ses_path_parent}")
 
-    if len(user_created_sesspath.split('/')) > 6:
-        app.error(title='Error', text='Session path needs to be a subfolder inside "sessions" and cannot be \'images\' or \'annotations\'')
-        return None
-    elif user_created_sesspath.endswith('images') or user_created_sesspath.endswith('annotations'):
+    if user_created_sesspath.endswith('images') or user_created_sesspath.endswith('annotations'):
         app.error(title='Error', text='Session path needs to be a subfolder inside "sessions" and cannot be \'images\' or \'annotations\'')
         return None
     elif user_created_sesspath.split('/')[-1] == 'sessions':
@@ -355,10 +356,10 @@ def get_interesting_filenames():
     from itertools import chain
     from common import minconf_threshold
     
-    global dtcdir, df_vals
+    global dtcdir, df_vals, debdir
 
     # Delete insect detections that are not important
-    df_vals.to_csv("~/Desktop/debugging/df_vals_debug.csv")
+    df_vals.to_csv(f"{debdir}/df_vals_debug.csv")
 
     try:
         # Get a list of filepaths for each row in df_vals that had more than minconf_threshold for a critical insect
@@ -401,7 +402,7 @@ def get_interesting_filenames():
 def open_validation_window():
     assert 'df_vals' in globals(), "You need to first perform model inference to create predictions."
 
-    global dtcdir, detections_list, val_idx, insect_idx, df_vals, critical_insects, confidence_threshold
+    global dtcdir, detections_list, val_idx, insect_idx, df_vals, critical_insects, confidence_threshold, debdir
 
     natsorted_detections = natsorted(os.listdir(dtcdir))
     df_vals.filepath = pd.Series(natsorted_detections)
@@ -434,7 +435,7 @@ def open_validation_window():
     if not df_vals.loc[val_idx].uncertain and verify_button.value == "UNVERIFIED":
         insect_button.value = df_vals.loc[val_idx].prediction
 
-    df_vals.to_csv("~/Desktop/debugging/df_vals_after_valwindow.csv")
+    df_vals.to_csv(f"{debdir}/df_vals_after_valwindow.csv")
 
     val_window.show()
 
