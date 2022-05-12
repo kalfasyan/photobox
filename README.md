@@ -26,9 +26,8 @@
 `sudo apt-get install -y pcmanfm`  
 2. Install the `photobox` package :  
 `pip install photobox`
-3. Download the [package files](https://pypi.org/project/photobox/#files) (photobox-X.Y.Z.tar.gz), the [extra files](https://kuleuven-my.sharepoint.com/:f:/g/personal/ioannis_kalfas_kuleuven_be/EtfN74iqV5NJspAMBYX4b_UBg7nfzFhkIYDYMuGkr3Xt9A?e=2q0iMB), and the [model](https://kuleuven-my.sharepoint.com/:u:/g/personal/ioannis_kalfas_kuleuven_be/EUBAo2_hrLdKu3Dw0bhg8NkBm_PoJ3AvV2VWOUBqvlhikg?e=ltM0a2) (an unskilled model is shared for demo purposes). 
-4. Extract the package files and then move the extra files and the model in the extracted directory, in the photobox folder (same dir as `photobox_app.py`).
-5. From that directory run:  
+3. Clone this repository and download the [model](https://kuleuven-my.sharepoint.com/:u:/g/personal/ioannis_kalfas_kuleuven_be/EUBAo2_hrLdKu3Dw0bhg8NkBm_PoJ3AvV2VWOUBqvlhikg?e=ltM0a2) (unskilled model shared for demo purposes) in the photobox folder - same dir as `photobox_app.py`.
+4. From that directory run:  
    `python photobox_app.py`
   
   
