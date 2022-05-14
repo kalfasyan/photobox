@@ -1,10 +1,13 @@
 ++========================
 # PhotoBox v0.0.3
 ==========================
-#### *Author:*    Ioannis Kalfas
+#### *Software author:*    Ioannis Kalfas
 #### *Contact:*   kalfasyan@gmail.com , ioannis.kalfas@kuleuven.be
 #### *Role:*      PhD Researcher
 #### *Division:*  MeBioS, KU Leuven
+#### ***The PhotoBox device itself was built by Frank Mathijs at KU Leuven (frank.mathijs@kuleuven.be)***
+--------
+![img0](./images/pbox_cover.png?raw=True "Cover")
 --------
 ## Features
 
