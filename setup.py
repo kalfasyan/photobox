@@ -7,7 +7,7 @@ requirements = [
     "chardet==4.0.0",
     "charset-normalizer==2.0.12",
     "click==8.1.3",
-    "cookiecutter==1.7.3",
+    "cookiecutter==2.1.1",
     "guizero==1.3.0",
     "idna==3.3",
     "jinja2==3.1.2",
