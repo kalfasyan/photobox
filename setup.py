@@ -13,7 +13,7 @@ requirements = [
     "jinja2==3.1.2",
     "jinja2-time==0.2.0",
     "joblib==1.2.0",
-    "lxml==4.8.0",
+    "lxml==4.9.1",
     "markupsafe==2.1.1",
     "matplotlib-inline==0.1.3",
     "natsort==8.1.0",
