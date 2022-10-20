@@ -47,6 +47,11 @@ A trained insect image classifier is fed with each insect image (150x150 pixels)
 The user is asked to verify each "critical-insect" detection and then save the results. The session folder will then contain csv files and histogram plots with the counts per sticky plate.
 ![img4](./images/pbox_slide4.png?raw=True "GUI Steps")
 
+### UPDATE 
+A newer PhotoBox version is under development. It is a more portable device that uses a smartphone to take images of sticky plates inside a smaller box which is illuminated by the phone's flash.  
+This new photobox comes with a Streamlit web interface to perform all functions that are available in the present repository.  
+More details will be available in a new repository. 
+
 ### DISCLAIMER
 --------
 All data in this repo belong to KU Leuven.
