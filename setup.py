@@ -29,7 +29,7 @@ requirements = [
     "statsmodels==0.13.2",
     "text-unidecode==1.3",
     "threadpoolctl==3.1.0",
-    "torch==1.11.0",
+    "torch==1.13.1",
     "torchaudio==0.11.0",
     "torchvision==0.12.0",
     "typing-extensions==4.2.0",
