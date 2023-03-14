@@ -38,7 +38,7 @@ requirements = [
     "scipy",
     "guizero",
     "pandas==1.4.2",
-    "ipython==8.2.0",
+    "ipython==8.10.0",
     "tqdm==4.64.0",
     "six==1.16.0",
 ]
